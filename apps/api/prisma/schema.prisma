@@ -1,0 +1,297 @@
+// schema.prisma — Two Cents v2
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// --- accounts ---
+
+model User {
+  id           Int      @id @default(autoincrement())
+  oidcSubject  String   @unique @map("oidc_subject")
+  name         String   @default("")
+  isAdmin      Boolean  @default(false) @map("is_admin")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  memberships         HouseholdMember[]
+  comments            Comment[]
+  pushSubscriptions   PushSubscription[]
+  notificationPrefs   NotificationPreference[]
+  notificationLogs    NotificationLog[]
+  feedbackSubmissions FeedbackSubmission[]
+
+  @@map("users")
+}
+
+// --- households ---
+
+enum ApprovalMode {
+  any
+  all
+}
+
+enum AppealPeriod {
+  monthly
+  quarterly
+}
+
+model Household {
+  id                 Int          @id @default(autoincrement())
+  name               String
+  appealQuotaCount   Int          @default(2) @map("appeal_quota_count")
+  appealQuotaPeriod  AppealPeriod @default(quarterly) @map("appeal_quota_period")
+  createdAt          DateTime     @default(now()) @map("created_at")
+
+  members  HouseholdMember[]
+  pending  PendingMembership[]
+  requests Request[]
+
+  @@map("households")
+}
+
+model HouseholdMember {
+  id            Int          @id @default(autoincrement())
+  householdId   Int          @map("household_id")
+  userId        Int          @map("user_id")
+  approvalMode  ApprovalMode @default(any) @map("approval_mode")
+  joinedAt      DateTime     @default(now()) @map("joined_at")
+
+  household     Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  approverLinks BuyerApprover[] @relation("BuyerApprover_buyer")
+  buyerLinks    BuyerApprover[] @relation("BuyerApprover_approver")
+  requests      Request[]
+  reviews       Review[]
+  appeals       Appeal[]
+
+  @@unique([householdId, userId])
+  @@map("household_members")
+}
+
+model BuyerApprover {
+  id         Int @id @default(autoincrement())
+  buyerId    Int @map("buyer_id")
+  approverId Int @map("approver_id")
+
+  buyer    HouseholdMember @relation("BuyerApprover_buyer", fields: [buyerId], references: [id], onDelete: Cascade)
+  approver HouseholdMember @relation("BuyerApprover_approver", fields: [approverId], references: [id], onDelete: Cascade)
+
+  @@unique([buyerId, approverId])
+  @@map("buyer_approvers")
+}
+
+model PendingMembership {
+  id                 Int          @id @default(autoincrement())
+  householdId        Int          @map("household_id")
+  authentikUsername  String       @map("authentik_username")
+  approvalMode       ApprovalMode @default(any) @map("approval_mode")
+  createdAt          DateTime     @default(now()) @map("created_at")
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+
+  @@unique([householdId, authentikUsername])
+  @@map("pending_memberships")
+}
+
+// --- requests ---
+
+enum RequestStatus {
+  pending
+  approved
+  delayed
+  awaiting_reconfirm
+  denied
+  cancelled
+  archived
+  purchased
+}
+
+enum Seriousness {
+  need
+  really_want
+  nice_to_have
+}
+
+enum ReviewAction {
+  approve
+  delay
+  deny
+}
+
+model Request {
+  id               Int           @id @default(autoincrement())
+  householdId      Int           @map("household_id")
+  buyerId          Int           @map("buyer_id")
+  title            String
+  description      String        @default("")
+  buyerSeriousness Seriousness   @map("buyer_seriousness")
+  status           RequestStatus @default(pending)
+  statusExpiresAt  DateTime?     @map("status_expires_at")
+  currency         String        @default("USD")
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
+
+  household Household        @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  buyer     HouseholdMember  @relation(fields: [buyerId], references: [id], onDelete: Restrict)
+
+  items    RequestItem[]
+  versions ListingVersion[]
+  reviews  Review[]
+  comments Comment[]
+  appeals  Appeal[]
+
+  @@map("requests")
+}
+
+model RequestItem {
+  id          Int      @id @default(autoincrement())
+  requestId   Int      @map("request_id")
+  title       String
+  url         String
+  priceCents  Int      @map("price_cents")
+  notes       String   @default("")
+  imageKey    String   @default("") @map("image_key")
+  position    Int      @default(0)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  request Request @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@map("request_items")
+}
+
+model ListingVersion {
+  id             Int      @id @default(autoincrement())
+  requestId      Int      @map("request_id")
+  itemsSnapshot  Json     @map("items_snapshot")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  request Request @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@map("listing_versions")
+}
+
+model Review {
+  id                  Int          @id @default(autoincrement())
+  requestId           Int          @map("request_id")
+  approverId          Int          @map("approver_id")
+  action              ReviewAction
+  approverSeriousness Seriousness  @map("approver_seriousness")
+  delayDays           Int?         @map("delay_days")
+  delayExpiresAt      DateTime?    @map("delay_expires_at")
+  reconfirmDeadline   DateTime?    @map("reconfirm_deadline")
+  notes               String       @default("")
+  createdAt           DateTime     @default(now()) @map("created_at")
+
+  request  Request         @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  approver HouseholdMember @relation(fields: [approverId], references: [id], onDelete: Restrict)
+
+  @@map("reviews")
+}
+
+model Comment {
+  id         Int      @id @default(autoincrement())
+  requestId  Int      @map("request_id")
+  authorId   Int      @map("author_id")
+  body       String
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  request Request @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  author  User    @relation(fields: [authorId], references: [id], onDelete: Restrict)
+
+  @@index([requestId, createdAt])
+  @@map("comments")
+}
+
+// --- appeals ---
+
+enum AppealStatus {
+  pending
+  upheld
+  overturned
+}
+
+model Appeal {
+  id            Int          @id @default(autoincrement())
+  requestId     Int          @map("request_id")
+  buyerId       Int          @map("buyer_id")
+  justification String
+  periodKey     String       @map("period_key")
+  status        AppealStatus @default(pending)
+  createdAt     DateTime     @default(now()) @map("created_at")
+  resolvedAt    DateTime?    @map("resolved_at")
+
+  request Request         @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  buyer   HouseholdMember @relation(fields: [buyerId], references: [id], onDelete: Restrict)
+
+  @@index([buyerId, periodKey])
+  @@map("appeals")
+}
+
+// --- notifications ---
+
+model PushSubscription {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("push_subscriptions")
+}
+
+model NotificationPreference {
+  id               Int      @id @default(autoincrement())
+  userId           Int      @map("user_id")
+  eventType        String   @map("event_type")
+  enabled          Boolean  @default(true)
+  quietHoursStart  String?  @map("quiet_hours_start")
+  quietHoursEnd    String?  @map("quiet_hours_end")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, eventType])
+  @@map("notification_preferences")
+}
+
+model ConsumedJWTJti {
+  jti        String   @id
+  consumedAt DateTime @default(now()) @map("consumed_at")
+
+  @@map("consumed_jwt_jtis")
+}
+
+model NotificationLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  eventKey  String   @map("event_key")
+  sentAt    DateTime @default(now()) @map("sent_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, eventKey])
+  @@map("notification_logs")
+}
+
+// --- feedback ---
+
+model FeedbackSubmission {
+  id                 Int      @id @default(autoincrement())
+  userId             Int      @map("user_id")
+  githubIssueNumber  Int?     @map("github_issue_number")
+  githubIssueUrl     String   @default("") @map("github_issue_url")
+  category           String   @default("")
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@map("feedback_submissions")
+}
