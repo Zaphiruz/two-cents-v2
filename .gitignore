@@ -1,0 +1,28 @@
+node_modules/
+dist/
+.next/
+.turbo/
+.cache/
+build/
+
+# Env
+.env
+.env.*
+!.env.example
+vault-token
+
+# Editor / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Tooling
+coverage/
+.nyc_output/
+playwright-report/
+test-results/
+.tsbuildinfo
+
+# Claude
+.claude/

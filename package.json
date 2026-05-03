@@ -1,0 +1,18 @@
+{
+  "name": "two-cents-v2",
+  "private": true,
+  "packageManager": "pnpm@9.12.0",
+  "engines": { "node": ">=22.0.0" },
+  "scripts": {
+    "dev:api": "pnpm --filter @two-cents/api dev",
+    "dev:web": "pnpm --filter @two-cents/web dev",
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "lint": "pnpm -r lint",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "prettier": "^3.3.3",
+    "typescript": "^5.6.0"
+  }
+}
