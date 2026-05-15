@@ -1,0 +1,224 @@
+import { describe, it, expect } from 'vitest';
+import {
+  RequestItemInputSchema,
+  NewRequestInputSchema,
+  EditRequestInputSchema,
+  ApproverActionInputSchema,
+} from './schemas.js';
+
+// ── RequestItemInput ──────────────────────────────────────────────────────────
+
+describe('RequestItemInputSchema', () => {
+  const validItem = {
+    title: 'Widget',
+    url: 'https://example.com/widget',
+    priceCents: 1999,
+  };
+
+  it('parses a valid item with all required fields', () => {
+    const result = RequestItemInputSchema.parse(validItem);
+    expect(result.title).toBe('Widget');
+    expect(result.url).toBe('https://example.com/widget');
+    expect(result.priceCents).toBe(1999);
+  });
+
+  it('applies defaults: notes and imageKey default to empty string', () => {
+    const result = RequestItemInputSchema.parse(validItem);
+    expect(result.notes).toBe('');
+    expect(result.imageKey).toBe('');
+  });
+
+  it('accepts optional id for existing items', () => {
+    const result = RequestItemInputSchema.parse({ ...validItem, id: 42 });
+    expect(result.id).toBe(42);
+  });
+
+  it('rejects missing title', () => {
+    expect(() =>
+      RequestItemInputSchema.parse({ url: 'https://example.com', priceCents: 100 }),
+    ).toThrow();
+  });
+
+  it('rejects empty title', () => {
+    expect(() =>
+      RequestItemInputSchema.parse({ ...validItem, title: '' }),
+    ).toThrow();
+  });
+
+  it('rejects an invalid URL', () => {
+    expect(() =>
+      RequestItemInputSchema.parse({ ...validItem, url: 'not-a-url' }),
+    ).toThrow();
+  });
+
+  it('rejects a negative priceCents', () => {
+    expect(() =>
+      RequestItemInputSchema.parse({ ...validItem, priceCents: -1 }),
+    ).toThrow();
+  });
+
+  it('accepts priceCents of 0 (free item; mirrors v1 DecimalField with no min)', () => {
+    const result = RequestItemInputSchema.parse({ ...validItem, priceCents: 0 });
+    expect(result.priceCents).toBe(0);
+  });
+
+  it('rejects a non-integer priceCents', () => {
+    expect(() =>
+      RequestItemInputSchema.parse({ ...validItem, priceCents: 19.99 }),
+    ).toThrow();
+  });
+});
+
+// ── NewRequestInput ───────────────────────────────────────────────────────────
+
+describe('NewRequestInputSchema', () => {
+  const validRequest = {
+    title: 'New Laptop',
+    buyerSeriousness: 'need' as const,
+    items: [{ title: 'Laptop', url: 'https://example.com/laptop', priceCents: 99900 }],
+  };
+
+  it('parses a valid request body', () => {
+    const result = NewRequestInputSchema.parse(validRequest);
+    expect(result.title).toBe('New Laptop');
+    expect(result.buyerSeriousness).toBe('need');
+    expect(result.items).toHaveLength(1);
+  });
+
+  it('applies defaults: description empty string and currency USD', () => {
+    const result = NewRequestInputSchema.parse(validRequest);
+    expect(result.description).toBe('');
+    expect(result.currency).toBe('USD');
+  });
+
+  it('accepts an explicit currency code', () => {
+    const result = NewRequestInputSchema.parse({ ...validRequest, currency: 'EUR' });
+    expect(result.currency).toBe('EUR');
+  });
+
+  it('rejects items array with zero items (min:1)', () => {
+    expect(() =>
+      NewRequestInputSchema.parse({ ...validRequest, items: [] }),
+    ).toThrow();
+  });
+
+  it('rejects an invalid currency: too long (USDX)', () => {
+    expect(() =>
+      NewRequestInputSchema.parse({ ...validRequest, currency: 'USDX' }),
+    ).toThrow();
+  });
+
+  it('rejects a lowercase currency code (usd)', () => {
+    expect(() =>
+      NewRequestInputSchema.parse({ ...validRequest, currency: 'usd' }),
+    ).toThrow();
+  });
+
+  it('rejects a missing title', () => {
+    expect(() =>
+      NewRequestInputSchema.parse({ buyerSeriousness: 'need', items: [validRequest.items[0]] }),
+    ).toThrow();
+  });
+
+  it('rejects an invalid buyerSeriousness', () => {
+    expect(() =>
+      NewRequestInputSchema.parse({ ...validRequest, buyerSeriousness: 'meh' }),
+    ).toThrow();
+  });
+});
+
+// ── EditRequestInput ──────────────────────────────────────────────────────────
+
+describe('EditRequestInputSchema', () => {
+  const validItem = { title: 'Widget', url: 'https://example.com/widget', priceCents: 500 };
+
+  it('parses with empty bundleChanges and one item', () => {
+    const result = EditRequestInputSchema.parse({ itemsPayload: [validItem] });
+    expect(result.bundleChanges).toEqual({});
+    expect(result.itemsPayload).toHaveLength(1);
+  });
+
+  it('parses a mix of items with and without id', () => {
+    const result = EditRequestInputSchema.parse({
+      bundleChanges: { title: 'Updated' },
+      itemsPayload: [
+        { id: 1, title: 'Existing', url: 'https://example.com/existing', priceCents: 100 },
+        { title: 'New item', url: 'https://example.com/new', priceCents: 200 },
+      ],
+    });
+    expect(result.itemsPayload[0]?.id).toBe(1);
+    expect(result.itemsPayload[1]?.id).toBeUndefined();
+  });
+
+  it('rejects itemsPayload with zero items', () => {
+    expect(() =>
+      EditRequestInputSchema.parse({ itemsPayload: [] }),
+    ).toThrow();
+  });
+
+});
+
+// ── ApproverActionInput ───────────────────────────────────────────────────────
+
+describe('ApproverActionInputSchema', () => {
+  it('parses a valid approve action', () => {
+    const result = ApproverActionInputSchema.parse({
+      action: 'approve',
+      approverSeriousness: 'really_want',
+    });
+    expect(result.action).toBe('approve');
+    expect(result.notes).toBe('');
+  });
+
+  it('parses a valid deny action', () => {
+    const result = ApproverActionInputSchema.parse({
+      action: 'deny',
+      approverSeriousness: 'nice_to_have',
+    });
+    expect(result.action).toBe('deny');
+  });
+
+  it('parses a delay action with delayOverrideDays', () => {
+    const result = ApproverActionInputSchema.parse({
+      action: 'delay',
+      approverSeriousness: 'need',
+      delayOverrideDays: 30,
+    });
+    expect(result.delayOverrideDays).toBe(30);
+  });
+
+  it('rejects non-delay action with delayOverrideDays (refine guard)', () => {
+    expect(() =>
+      ApproverActionInputSchema.parse({
+        action: 'approve',
+        approverSeriousness: 'need',
+        delayOverrideDays: 14,
+      }),
+    ).toThrow();
+  });
+
+  it('rejects an invalid action', () => {
+    expect(() =>
+      ApproverActionInputSchema.parse({
+        action: 'skip',
+        approverSeriousness: 'need',
+      }),
+    ).toThrow();
+  });
+
+  it('rejects a missing approverSeriousness', () => {
+    expect(() =>
+      ApproverActionInputSchema.parse({ action: 'approve' }),
+    ).toThrow();
+  });
+
+  it('rejects a non-positive delayOverrideDays', () => {
+    expect(() =>
+      ApproverActionInputSchema.parse({
+        action: 'delay',
+        approverSeriousness: 'need',
+        delayOverrideDays: 0,
+      }),
+    ).toThrow();
+  });
+});
