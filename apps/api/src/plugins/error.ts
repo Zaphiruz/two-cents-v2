@@ -3,6 +3,7 @@ import { ZodError } from 'zod';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import { IllegalTransition } from '../lib/state.js';
 import { QuotaExceeded } from '../services/appeals.js';
+import { JWTInvalidError, JWTReplayError } from '../lib/jwt.js';
 
 export default fp(async (app) => {
   app.setErrorHandler((err, req, reply) => {
@@ -16,6 +17,14 @@ export default fp(async (app) => {
     }
     if (err instanceof QuotaExceeded) {
       reply.code(422).send({ error: 'quota_exceeded', message: err.message });
+      return;
+    }
+    if (err instanceof JWTInvalidError) {
+      reply.code(400).send({ error: 'invalid_token', message: err.message });
+      return;
+    }
+    if (err instanceof JWTReplayError) {
+      reply.code(409).send({ error: 'token_already_used', message: err.message });
       return;
     }
     if (err instanceof PrismaClientKnownRequestError) {

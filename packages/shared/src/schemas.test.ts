@@ -9,6 +9,8 @@ import {
   ResolveAppealInputSchema,
   PushSubscribeInputSchema,
   PushUnsubscribeInputSchema,
+  NotificationPreferenceInputSchema,
+  UpdateNotificationPreferencesInputSchema,
 } from './schemas.js';
 
 // ── RequestItemInput ──────────────────────────────────────────────────────────
@@ -367,6 +369,72 @@ describe('PushUnsubscribeInputSchema', () => {
   it('rejects a missing endpoint', () => {
     expect(() =>
       PushUnsubscribeInputSchema.parse({}),
+    ).toThrow();
+  });
+});
+
+// ── NotificationPreferenceInput ───────────────────────────────────────────────
+
+describe('NotificationPreferenceInputSchema', () => {
+  it('parses a valid preference with enabled=true', () => {
+    const result = NotificationPreferenceInputSchema.parse({
+      eventType: 'request_pending',
+      enabled: true,
+    });
+    expect(result.eventType).toBe('request_pending');
+    expect(result.enabled).toBe(true);
+  });
+
+  it('parses a preference with quiet hours', () => {
+    const result = NotificationPreferenceInputSchema.parse({
+      eventType: 'comment',
+      enabled: false,
+      quietHoursStart: '22:00',
+      quietHoursEnd: '07:00',
+    });
+    expect(result.quietHoursStart).toBe('22:00');
+    expect(result.quietHoursEnd).toBe('07:00');
+  });
+
+  it('rejects an invalid quiet hours format (no colon)', () => {
+    expect(() =>
+      NotificationPreferenceInputSchema.parse({
+        eventType: 'comment',
+        enabled: true,
+        quietHoursStart: '2200',
+      }),
+    ).toThrow();
+  });
+
+  it('rejects an empty eventType (min:1)', () => {
+    expect(() =>
+      NotificationPreferenceInputSchema.parse({ eventType: '', enabled: true }),
+    ).toThrow();
+  });
+});
+
+// ── UpdateNotificationPreferencesInput ────────────────────────────────────────
+
+describe('UpdateNotificationPreferencesInputSchema', () => {
+  it('parses a valid preferences array', () => {
+    const result = UpdateNotificationPreferencesInputSchema.parse({
+      preferences: [
+        { eventType: 'request_pending', enabled: true },
+        { eventType: 'comment', enabled: false, quietHoursStart: '22:00', quietHoursEnd: '07:00' },
+      ],
+    });
+    expect(result.preferences).toHaveLength(2);
+  });
+
+  it('rejects an empty preferences array (min:1)', () => {
+    expect(() =>
+      UpdateNotificationPreferencesInputSchema.parse({ preferences: [] }),
+    ).toThrow();
+  });
+
+  it('rejects missing preferences field', () => {
+    expect(() =>
+      UpdateNotificationPreferencesInputSchema.parse({}),
     ).toThrow();
   });
 });

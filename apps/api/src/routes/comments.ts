@@ -13,6 +13,7 @@ import type { FastifyInstance } from 'fastify';
 import { CommentInputSchema } from '@two-cents/shared';
 import { memberForUser, canViewByMember } from '../lib/permissions.js';
 import { authGuard } from '../lib/auth-utils.js';
+import { fireEvent } from '../services/events.js';
 
 export default async function commentsRoutes(app: FastifyInstance) {
   // ── POST /api/requests/:id/comments ──────────────────────────────────────
@@ -68,6 +69,18 @@ export default async function commentsRoutes(app: FastifyInstance) {
         author: { select: { id: true, name: true } },
       },
     });
+
+    // Fire comment event — notify buyer + all approvers except the author.
+    // Wrapped in try/catch: notification failure must NOT break the request lifecycle.
+    try {
+      await fireEvent(app.prisma, 'comment', {
+        requestId,
+        authorUserId: userId,
+        body: body.body,
+      });
+    } catch (err) {
+      req.log.error({ err, requestId, commentId: comment.id }, 'fireEvent comment failed');
+    }
 
     reply.code(201).send(comment);
   });

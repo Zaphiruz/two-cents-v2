@@ -35,6 +35,7 @@ import { appealsRemaining } from '../services/appeals.js';
 import { saveRequestEdit } from '../services/saveRequestEdit.js';
 import { transition } from '../lib/state.js';
 import { DAY_MS } from '../lib/delays.js';
+import { fireEvent } from '../services/events.js';
 
 export default async function requestsRoutes(app: FastifyInstance) {
   // ── GET /api/requests ─────────────────────────────────────────────────────
@@ -157,6 +158,14 @@ export default async function requestsRoutes(app: FastifyInstance) {
 
       return newReq;
     });
+
+    // Fire request_pending event — notify all approvers.
+    // Wrapped in try/catch: notification failure must NOT break the request lifecycle.
+    try {
+      await fireEvent(app.prisma, 'request_pending', { requestId: created.id });
+    } catch (err) {
+      req.log.error({ err, requestId: created.id }, 'fireEvent request_pending failed');
+    }
 
     reply.code(201).send({ id: created.id });
   });
@@ -366,6 +375,22 @@ export default async function requestsRoutes(app: FastifyInstance) {
       delayOverrideMs,
       notes: body.notes,
     });
+
+    // Fire the appropriate event based on action. Map action → event name (matches v1).
+    // Wrapped in try/catch: notification failure must NOT break the request lifecycle.
+    const actionEventMap: Record<string, 'approval' | 'delay' | 'denial'> = {
+      approve: 'approval',
+      delay: 'delay',
+      deny: 'denial',
+    };
+    const actEventName = actionEventMap[body.action];
+    if (actEventName) {
+      try {
+        await fireEvent(app.prisma, actEventName, { requestId });
+      } catch (err) {
+        req.log.error({ err, requestId, action: body.action }, `fireEvent ${actEventName} failed`);
+      }
+    }
 
     return { id: updated.id, status: updated.status, statusExpiresAt: updated.statusExpiresAt };
   });

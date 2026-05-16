@@ -15,6 +15,7 @@ import { authGuard } from '../lib/auth-utils.js';
 import { memberForUser } from '../lib/permissions.js';
 import { fileAppeal } from '../services/appeals.js';
 import { transitionOnTx } from '../lib/state.js';
+import { fireEvent } from '../services/events.js';
 
 export default async function appealsRoutes(app: FastifyInstance) {
   // ── POST /api/appeals ─────────────────────────────────────────────────────
@@ -64,7 +65,13 @@ export default async function appealsRoutes(app: FastifyInstance) {
       justification: body.justification,
     });
 
-    // TODO(Phase 6): fireEvent('appeal_filed', appeal)
+    // Fire appeal_filed event — notify all approvers.
+    // Wrapped in try/catch: notification failure must NOT break the request lifecycle.
+    try {
+      await fireEvent(app.prisma, 'appeal_filed', { appealId: appeal.id });
+    } catch (err) {
+      req.log.error({ err, appealId: appeal.id }, 'fireEvent appeal_filed failed');
+    }
 
     reply.code(201).send(appeal);
   });
@@ -191,7 +198,17 @@ export default async function appealsRoutes(app: FastifyInstance) {
       return updatedAppeal;
     });
 
-    // TODO(Phase 6): fireEvent('appeal_resolved', updated)
+    // Fire appeal_resolved event — notify the buyer with the outcome.
+    // Wrapped in try/catch: notification failure must NOT break the request lifecycle.
+    const outcome = body.decision === 'overturn' ? 'overturned' : 'upheld';
+    try {
+      await fireEvent(app.prisma, 'appeal_resolved', {
+        appealId: appeal.id,
+        outcome,
+      });
+    } catch (err) {
+      req.log.error({ err, appealId: appeal.id, outcome }, 'fireEvent appeal_resolved failed');
+    }
 
     return updated;
   });

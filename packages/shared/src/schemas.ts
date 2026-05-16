@@ -149,3 +149,29 @@ export const PushUnsubscribeInputSchema = z.object({
   endpoint: z.string().url(),
 });
 export type PushUnsubscribeInput = z.infer<typeof PushUnsubscribeInputSchema>;
+
+// ── NotificationPreferenceInput ───────────────────────────────────────────────
+
+/**
+ * A single notification preference entry.
+ * `eventType` maps to v1's event_type field on NotificationPreference.
+ * `quietHoursStart` / `quietHoursEnd` are HH:MM strings (e.g. "22:00").
+ */
+export const NotificationPreferenceInputSchema = z.object({
+  eventType: z.string().min(1).max(100),
+  enabled: z.boolean(),
+  quietHoursStart: z.string().regex(/^\d{2}:\d{2}$/).nullable().optional(),
+  quietHoursEnd: z.string().regex(/^\d{2}:\d{2}$/).nullable().optional(),
+});
+export type NotificationPreferenceInput = z.infer<typeof NotificationPreferenceInputSchema>;
+
+// ── UpdateNotificationPreferencesInput ────────────────────────────────────────
+
+/**
+ * Body of PUT /api/notifications/preferences.
+ * Upserts one or more notification preferences for the authenticated user.
+ */
+export const UpdateNotificationPreferencesInputSchema = z.object({
+  preferences: z.array(NotificationPreferenceInputSchema).min(1),
+});
+export type UpdateNotificationPreferencesInput = z.infer<typeof UpdateNotificationPreferencesInputSchema>;
