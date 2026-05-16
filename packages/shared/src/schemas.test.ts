@@ -7,6 +7,8 @@ import {
   CommentInputSchema,
   FileAppealInputSchema,
   ResolveAppealInputSchema,
+  PushSubscribeInputSchema,
+  PushUnsubscribeInputSchema,
 } from './schemas.js';
 
 // ── RequestItemInput ──────────────────────────────────────────────────────────
@@ -302,6 +304,69 @@ describe('ResolveAppealInputSchema', () => {
   it('rejects a missing decision', () => {
     expect(() =>
       ResolveAppealInputSchema.parse({}),
+    ).toThrow();
+  });
+});
+
+// ── PushSubscribeInput ────────────────────────────────────────────────────────
+
+describe('PushSubscribeInputSchema', () => {
+  const validSub = {
+    endpoint: 'https://fcm.googleapis.com/fcm/send/abc123',
+    keys: { p256dh: 'somePublicKey', auth: 'someAuth' },
+  };
+
+  it('parses a valid push subscription', () => {
+    const result = PushSubscribeInputSchema.parse(validSub);
+    expect(result.endpoint).toBe(validSub.endpoint);
+    expect(result.keys.p256dh).toBe('somePublicKey');
+    expect(result.keys.auth).toBe('someAuth');
+  });
+
+  it('rejects a non-URL endpoint', () => {
+    expect(() =>
+      PushSubscribeInputSchema.parse({ ...validSub, endpoint: 'not-a-url' }),
+    ).toThrow();
+  });
+
+  it('rejects missing keys', () => {
+    expect(() =>
+      PushSubscribeInputSchema.parse({ endpoint: validSub.endpoint }),
+    ).toThrow();
+  });
+
+  it('rejects empty p256dh (min:1)', () => {
+    expect(() =>
+      PushSubscribeInputSchema.parse({ ...validSub, keys: { p256dh: '', auth: 'auth' } }),
+    ).toThrow();
+  });
+
+  it('rejects empty auth (min:1)', () => {
+    expect(() =>
+      PushSubscribeInputSchema.parse({ ...validSub, keys: { p256dh: 'key', auth: '' } }),
+    ).toThrow();
+  });
+});
+
+// ── PushUnsubscribeInput ──────────────────────────────────────────────────────
+
+describe('PushUnsubscribeInputSchema', () => {
+  it('parses a valid endpoint URL', () => {
+    const result = PushUnsubscribeInputSchema.parse({
+      endpoint: 'https://fcm.googleapis.com/fcm/send/abc123',
+    });
+    expect(result.endpoint).toBe('https://fcm.googleapis.com/fcm/send/abc123');
+  });
+
+  it('rejects a non-URL endpoint', () => {
+    expect(() =>
+      PushUnsubscribeInputSchema.parse({ endpoint: 'not-a-url' }),
+    ).toThrow();
+  });
+
+  it('rejects a missing endpoint', () => {
+    expect(() =>
+      PushUnsubscribeInputSchema.parse({}),
     ).toThrow();
   });
 });

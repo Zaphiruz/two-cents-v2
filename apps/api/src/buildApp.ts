@@ -8,6 +8,8 @@ import authRoutes from './routes/auth.js';
 import requestsRoutes from './routes/requests.js';
 import commentsRoutes from './routes/comments.js';
 import appealsRoutes from './routes/appeals.js';
+import pushRoutes from './routes/push.js';
+import { configurePush } from './lib/push.js';
 
 export async function buildApp(): Promise<FastifyInstance> {
   const isTest = process.env.NODE_ENV === 'test';
@@ -24,6 +26,10 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(requestsRoutes);
   await app.register(commentsRoutes);
   await app.register(appealsRoutes);
+  await app.register(pushRoutes);
+
+  // Configure VAPID credentials for web-push (no-op if env vars missing)
+  configurePush();
 
   app.get('/healthz', async (req, reply) => {
     try {

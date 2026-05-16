@@ -50,6 +50,9 @@ importers:
       iron-session:
         specifier: ^8.0.4
         version: 8.0.4
+      jose:
+        specifier: ^6.2.3
+        version: 6.2.3
       openid-client:
         specifier: ^5.7.0
         version: 5.7.1
@@ -72,9 +75,6 @@ importers:
       '@types/web-push':
         specifier: ^3.6.4
         version: 3.6.4
-      jose:
-        specifier: ^6.2.3
-        version: 6.2.3
       nock:
         specifier: ^14.0.15
         version: 14.0.15

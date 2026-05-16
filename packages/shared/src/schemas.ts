@@ -122,3 +122,30 @@ export const ResolveAppealInputSchema = z.object({
   decision: z.enum(['overturn', 'uphold']),
 });
 export type ResolveAppealInput = z.infer<typeof ResolveAppealInputSchema>;
+
+// ── PushSubscribeInput ────────────────────────────────────────────────────────
+
+/**
+ * Body of POST /api/push/subscribe.
+ * Matches the Web Push API's PushSubscriptionJSON shape (browser sends this directly).
+ * `endpoint` is unique — upsert uses it as the key.
+ */
+export const PushSubscribeInputSchema = z.object({
+  endpoint: z.string().url(),
+  keys: z.object({
+    p256dh: z.string().min(1),
+    auth: z.string().min(1),
+  }),
+});
+export type PushSubscribeInput = z.infer<typeof PushSubscribeInputSchema>;
+
+// ── PushUnsubscribeInput ──────────────────────────────────────────────────────
+
+/**
+ * Body of POST /api/push/unsubscribe.
+ * Identifies the subscription by its unique endpoint URL.
+ */
+export const PushUnsubscribeInputSchema = z.object({
+  endpoint: z.string().url(),
+});
+export type PushUnsubscribeInput = z.infer<typeof PushUnsubscribeInputSchema>;
