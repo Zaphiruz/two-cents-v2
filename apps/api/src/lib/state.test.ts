@@ -337,6 +337,20 @@ describe('state machine transitions', () => {
 
   // ── delay with delay_override ──────────────────────────────────────────────
 
+  it('writes notes to the Review row when provided', async () => {
+    const { buyer, approver } = await createMembers();
+    const req = await createRequest({ householdId: buyer.householdId, buyerId: buyer.id });
+
+    await transition(prisma, req.id, 'approve', {
+      actorId: approver.id,
+      approverSeriousness: 'need',
+      notes: 'detailed feedback',
+    });
+
+    const review = await prisma.review.findFirstOrThrow({ where: { requestId: req.id } });
+    expect(review.notes).toBe('detailed feedback');
+  });
+
   it('delay with delay_override is clamped to 2× auto (band 2, really_want = 14d → max 28d)', async () => {
     const { buyer, approver } = await createMembers();
     // $150 = 15000 cents → band 2; really_want → auto 14d

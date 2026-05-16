@@ -6,6 +6,7 @@ import errorPlugin from './plugins/error.js';
 import authPlugin from './plugins/auth.js';
 import authRoutes from './routes/auth.js';
 import requestsRoutes from './routes/requests.js';
+import commentsRoutes from './routes/comments.js';
 
 export async function buildApp(): Promise<FastifyInstance> {
   const isTest = process.env.NODE_ENV === 'test';
@@ -20,6 +21,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(authPlugin);
   await app.register(authRoutes);
   await app.register(requestsRoutes);
+  await app.register(commentsRoutes);
 
   app.get('/healthz', async (req, reply) => {
     try {

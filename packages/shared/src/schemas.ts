@@ -86,3 +86,15 @@ export const ApproverActionInputSchema = z
     },
   );
 export type ApproverActionInput = z.infer<typeof ApproverActionInputSchema>;
+
+// ── CommentInput ──────────────────────────────────────────────────────────────
+
+/**
+ * Body of POST /api/requests/:id/comments.
+ * A non-empty string bounded at 10,000 characters for API hygiene.
+ * v1 strips whitespace and rejects empty — we match that via min(1).
+ */
+export const CommentInputSchema = z.object({
+  body: z.string().min(1, 'comment body is required').max(10_000, 'comment body is too long'),
+});
+export type CommentInput = z.infer<typeof CommentInputSchema>;

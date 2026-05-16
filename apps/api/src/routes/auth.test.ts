@@ -22,31 +22,8 @@ import { buildApp } from '../buildApp.js';
 import { prisma } from '../test-helpers/db.js';
 import { resetOidcClient } from '../plugins/auth.js';
 import type { FastifyInstance } from 'fastify';
+import { buildTestApp } from '../test-helpers/session.js';
 
-/**
- * Build an app with an extra test-only route that directly sets req.session.userId.
- * This lets us inject a real sealed iron-session cookie without needing a real OIDC flow.
- */
-async function buildTestApp(userId: number): Promise<{ app: FastifyInstance; sessionCookie: string }> {
-  const app = await buildApp();
-
-  // Add a test-only route that sets session.userId and returns the Set-Cookie header.
-  // fastify-plugin is NOT used here: we want this route scoped only to this test app.
-  app.get('/__set_session', async (req, reply) => {
-    req.session.userId = userId;
-    await req.session.save();
-    reply.send({ ok: true });
-  });
-
-  const res = await app.inject({
-    method: 'GET',
-    url: '/__set_session',
-  });
-  const setCookie = res.headers['set-cookie'];
-  const sessionCookie = Array.isArray(setCookie) ? setCookie[0]! : setCookie as string;
-
-  return { app, sessionCookie };
-}
 
 describe('auth routes', () => {
   let app: FastifyInstance;

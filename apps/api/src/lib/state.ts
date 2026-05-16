@@ -55,6 +55,8 @@ export interface TransitionOpts {
   approverSeriousness?: Seriousness;
   /** Optional override for delay duration, in milliseconds */
   delayOverrideMs?: number;
+  /** Optional free-text notes from the approver, written to the Review row */
+  notes?: string;
 }
 
 // ── Return type ───────────────────────────────────────────────────────────────
@@ -161,6 +163,7 @@ export async function transitionOnTx(
         approverSeriousness: reviewData.approverSeriousness,
         delayDays: reviewData.delayDays ?? null,
         delayExpiresAt: reviewData.delayExpiresAt ?? null,
+        notes: opts.notes ?? '',
       },
     });
   }

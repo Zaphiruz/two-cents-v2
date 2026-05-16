@@ -7,7 +7,7 @@
 import { describe, it, expect } from 'vitest';
 import { prisma } from '../test-helpers/db.js';
 import { createMembers, createRequest } from '../test-helpers/fixtures.js';
-import { isBuyer, canAct, canView } from './permissions.js';
+import { isBuyer, canAct, canView, isBuyerByMember, canActByMember, canViewByMember } from './permissions.js';
 
 describe('permissions', () => {
   // ── isBuyer ────────────────────────────────────────────────────────────────
@@ -123,5 +123,22 @@ describe('permissions', () => {
     });
 
     expect(await canView(prisma, otherUser.id, requestId)).toBe(false);
+  });
+
+  // ── *ByMember null-on-missing-request ─────────────────────────────────────
+
+  it('isBuyerByMember returns null when the request does not exist', async () => {
+    const { buyer } = await createMembers();
+    expect(await isBuyerByMember(prisma, buyer.id, 999999)).toBeNull();
+  });
+
+  it('canActByMember returns null when the request does not exist', async () => {
+    const { approver } = await createMembers();
+    expect(await canActByMember(prisma, approver.id, 999999)).toBeNull();
+  });
+
+  it('canViewByMember returns null when the request does not exist', async () => {
+    const { buyer } = await createMembers();
+    expect(await canViewByMember(prisma, buyer.id, 999999)).toBeNull();
   });
 });

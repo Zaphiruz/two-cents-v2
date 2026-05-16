@@ -4,6 +4,7 @@ import {
   NewRequestInputSchema,
   EditRequestInputSchema,
   ApproverActionInputSchema,
+  CommentInputSchema,
 } from './schemas.js';
 
 // ── RequestItemInput ──────────────────────────────────────────────────────────
@@ -220,5 +221,22 @@ describe('ApproverActionInputSchema', () => {
         delayOverrideDays: 0,
       }),
     ).toThrow();
+  });
+});
+
+// ── CommentInput ──────────────────────────────────────────────────────────────
+
+describe('CommentInputSchema', () => {
+  it('parses a valid comment body', () => {
+    const result = CommentInputSchema.parse({ body: 'Great idea!' });
+    expect(result.body).toBe('Great idea!');
+  });
+
+  it('rejects an empty body (min:1)', () => {
+    expect(() => CommentInputSchema.parse({ body: '' })).toThrow();
+  });
+
+  it('rejects a body exceeding 10,000 characters', () => {
+    expect(() => CommentInputSchema.parse({ body: 'x'.repeat(10_001) })).toThrow();
   });
 });

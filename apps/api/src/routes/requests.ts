@@ -1,21 +1,40 @@
 /**
- * requests.ts — request-bundle routes (Task 4.2a)
+ * requests.ts — request-bundle routes (Task 4.2a + 4.2b)
  *
- * GET  /api/requests       — queue: incoming (pending, as approver) + myActive
- * POST /api/requests       — create a new request with items
- * GET  /api/requests/:id   — detail: request + items + reviews + comments + appealsRemaining
+ * GET   /api/requests           — queue: incoming (pending, as approver) + myActive
+ * POST  /api/requests           — create a new request with items
+ * GET   /api/requests/:id       — detail: request + items + reviews + comments + appealsRemaining
+ * PATCH /api/requests/:id       — edit bundle (buyer only)
+ * POST  /api/requests/:id/act   — approver action (approve/delay/deny)
+ * POST  /api/requests/:id/cancel    — buyer cancel
+ * POST  /api/requests/:id/reconfirm — buyer reconfirm (after delay expires)
+ * POST  /api/requests/:id/purchase  — buyer mark as purchased
  *
- * Mutation endpoints (PATCH, act, cancel, reconfirm, purchase, comments) come
- * in Task 4.2b.
+ * Comment route lives in routes/comments.ts (registered separately in buildApp.ts).
  *
- * v1 reference: apps/requests_app/views.py (queue, new_request, detail views)
+ * v1 reference: apps/requests_app/views.py
  * Permission reference: apps/core/permissions.py
  */
 
 import type { FastifyInstance } from 'fastify';
-import { NewRequestInputSchema, ACTIVE_STATUSES } from '@two-cents/shared';
-import { canView } from '../lib/permissions.js';
+import { Prisma } from '@prisma/client';
+import {
+  NewRequestInputSchema,
+  EditRequestInputSchema,
+  ApproverActionInputSchema,
+  ACTIVE_STATUSES,
+} from '@two-cents/shared';
+import {
+  canView,
+  memberForUser,
+  isBuyerByMember,
+  canActByMember,
+} from '../lib/permissions.js';
+import { authGuard } from '../lib/auth-utils.js';
 import { appealsRemaining } from '../services/appeals.js';
+import { saveRequestEdit } from '../services/saveRequestEdit.js';
+import { transition } from '../lib/state.js';
+import { DAY_MS } from '../lib/delays.js';
 
 export default async function requestsRoutes(app: FastifyInstance) {
   // ── GET /api/requests ─────────────────────────────────────────────────────
@@ -27,17 +46,11 @@ export default async function requestsRoutes(app: FastifyInstance) {
   //               (v1: ["pending","delayed","awaiting_reconfirm","approved","denied"])
 
   app.get('/api/requests', async (req, reply) => {
-    const userId = req.session.userId;
-    if (!userId) {
-      reply.code(401).send({ error: 'not_authenticated' });
-      return;
-    }
+    const userId = authGuard(req, reply);
+    if (userId === null) return;
 
     // Find this user's HouseholdMember (users may not be in any household yet)
-    const member = await app.prisma.householdMember.findFirst({
-      where: { userId },
-      select: { id: true, householdId: true },
-    });
+    const member = await memberForUser(app.prisma, userId);
     if (!member) {
       // Not in any household — empty queues (mirrors v1 returning no_household page)
       return { incoming: [], myActive: [] };
@@ -94,19 +107,13 @@ export default async function requestsRoutes(app: FastifyInstance) {
   // TODO(Phase 6): fireEvent('request_pending', created)
 
   app.post('/api/requests', async (req, reply) => {
-    const userId = req.session.userId;
-    if (!userId) {
-      reply.code(401).send({ error: 'not_authenticated' });
-      return;
-    }
+    const userId = authGuard(req, reply);
+    if (userId === null) return;
 
     // Validate body — ZodError propagates to the error handler which returns 400
     const body = NewRequestInputSchema.parse(req.body);
 
-    const member = await app.prisma.householdMember.findFirst({
-      where: { userId },
-      select: { id: true, householdId: true },
-    });
+    const member = await memberForUser(app.prisma, userId);
     if (!member) {
       reply.code(403).send({ error: 'not_in_household' });
       return;
@@ -120,7 +127,7 @@ export default async function requestsRoutes(app: FastifyInstance) {
       return;
     }
 
-    const created = await app.prisma.$transaction(async (tx: import('@prisma/client').Prisma.TransactionClient) => {
+    const created = await app.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const newReq = await tx.request.create({
         data: {
           householdId: member.householdId,
@@ -165,11 +172,8 @@ export default async function requestsRoutes(app: FastifyInstance) {
   // Sensitive fields excluded: no oidcSubject on User selects.
 
   app.get<{ Params: { id: string } }>('/api/requests/:id', async (req, reply) => {
-    const userId = req.session.userId;
-    if (!userId) {
-      reply.code(401).send({ error: 'not_authenticated' });
-      return;
-    }
+    const userId = authGuard(req, reply);
+    if (userId === null) return;
 
     const requestId = Number(req.params.id);
     if (!Number.isFinite(requestId) || !Number.isInteger(requestId) || requestId <= 0) {
@@ -251,5 +255,232 @@ export default async function requestsRoutes(app: FastifyInstance) {
     );
 
     return { request, appealsRemaining: appealsRemainingCount };
+  });
+
+  // ── PATCH /api/requests/:id ───────────────────────────────────────────────
+  //
+  // Edit a request's bundle fields and/or items.
+  // Only the buyer may edit. Meaningful edits (price/url/add/remove) reset
+  // status to pending via transitionOnTx('edit_meaningful').
+  // IllegalTransition → 409 (request is in a non-editable state).
+  //
+  // v1 reference: views.py edit()
+  // TODO(Phase 6): fireEvent if meaningful edit
+
+  app.patch<{ Params: { id: string } }>('/api/requests/:id', async (req, reply) => {
+    const userId = authGuard(req, reply);
+    if (userId === null) return;
+
+    const requestId = Number(req.params.id);
+    if (!Number.isFinite(requestId) || !Number.isInteger(requestId) || requestId <= 0) {
+      reply.code(400).send({ error: 'invalid_id' });
+      return;
+    }
+
+    // Validate body — ZodError → 400
+    const body = EditRequestInputSchema.parse(req.body);
+
+    // Single member lookup — used for both permission check and actorId
+    const member = await memberForUser(app.prisma, userId);
+    if (!member) {
+      reply.code(403).send({ error: 'not_in_household' });
+      return;
+    }
+
+    // isBuyerByMember: returns null if request missing (404), false if not buyer (403)
+    const allowed = await isBuyerByMember(app.prisma, member.id, requestId);
+    if (allowed === null) {
+      reply.code(404).send({ error: 'not_found' });
+      return;
+    }
+    if (!allowed) {
+      reply.code(403).send({ error: 'forbidden' });
+      return;
+    }
+
+    const actorId = member.id;
+
+    // saveRequestEdit throws IllegalTransition (→ 409) if status is non-editable
+    const result = await saveRequestEdit(app.prisma, {
+      requestId,
+      actorId,
+      bundleChanges: body.bundleChanges,
+      itemsPayload: body.itemsPayload,
+    });
+
+    return { requestId: result.requestId, wasMeaningful: result.wasMeaningful };
+  });
+
+  // ── POST /api/requests/:id/act ────────────────────────────────────────────
+  //
+  // Approver action: approve, delay, or deny.
+  // Gate: canAct (user must be an approver of the buyer).
+  // Status guard: handled by transition() — throws IllegalTransition → 409.
+  //
+  // v1 reference: views.py act()
+  // TODO(Phase 6): fireEvent('request_acted', updated)
+
+  app.post<{ Params: { id: string } }>('/api/requests/:id/act', async (req, reply) => {
+    const userId = authGuard(req, reply);
+    if (userId === null) return;
+
+    const requestId = Number(req.params.id);
+    if (!Number.isFinite(requestId) || !Number.isInteger(requestId) || requestId <= 0) {
+      reply.code(400).send({ error: 'invalid_id' });
+      return;
+    }
+
+    // Validate body — ZodError → 400
+    const body = ApproverActionInputSchema.parse(req.body);
+
+    // Single member lookup — used for both permission check and actorId
+    const member = await memberForUser(app.prisma, userId);
+    if (!member) {
+      reply.code(403).send({ error: 'not_in_household' });
+      return;
+    }
+
+    // canActByMember: returns null if request missing (404), false if not approver (403)
+    const allowed = await canActByMember(app.prisma, member.id, requestId);
+    if (allowed === null) {
+      reply.code(404).send({ error: 'not_found' });
+      return;
+    }
+    if (!allowed) {
+      reply.code(403).send({ error: 'forbidden' });
+      return;
+    }
+
+    const actorId = member.id;
+
+    // Convert optional delayOverrideDays → ms for the state machine
+    const delayOverrideMs =
+      body.delayOverrideDays !== undefined
+        ? body.delayOverrideDays * DAY_MS
+        : undefined;
+
+    // transition throws IllegalTransition → 409 if action is not valid for current status
+    const updated = await transition(app.prisma, requestId, body.action, {
+      actorId,
+      approverSeriousness: body.approverSeriousness,
+      delayOverrideMs,
+      notes: body.notes,
+    });
+
+    return { id: updated.id, status: updated.status, statusExpiresAt: updated.statusExpiresAt };
+  });
+
+  // ── POST /api/requests/:id/cancel ─────────────────────────────────────────
+  //
+  // Buyer cancels a request (valid from pending, delayed, awaiting_reconfirm, approved).
+  // v1 reference: views.py cancel()
+  // TODO(Phase 6): fireEvent
+
+  app.post<{ Params: { id: string } }>('/api/requests/:id/cancel', async (req, reply) => {
+    const userId = authGuard(req, reply);
+    if (userId === null) return;
+
+    const requestId = Number(req.params.id);
+    if (!Number.isFinite(requestId) || !Number.isInteger(requestId) || requestId <= 0) {
+      reply.code(400).send({ error: 'invalid_id' });
+      return;
+    }
+
+    const member = await memberForUser(app.prisma, userId);
+    if (!member) {
+      reply.code(403).send({ error: 'not_in_household' });
+      return;
+    }
+
+    const allowed = await isBuyerByMember(app.prisma, member.id, requestId);
+    if (allowed === null) {
+      reply.code(404).send({ error: 'not_found' });
+      return;
+    }
+    if (!allowed) {
+      reply.code(403).send({ error: 'forbidden' });
+      return;
+    }
+
+    const actorId = member.id;
+
+    const updated = await transition(app.prisma, requestId, 'cancel', { actorId });
+    return { id: updated.id, status: updated.status, statusExpiresAt: updated.statusExpiresAt };
+  });
+
+  // ── POST /api/requests/:id/reconfirm ─────────────────────────────────────
+  //
+  // Buyer reconfirms after a delay expires (awaiting_reconfirm → pending).
+  // v1 reference: views.py reconfirm()
+  // TODO(Phase 6): fireEvent
+
+  app.post<{ Params: { id: string } }>('/api/requests/:id/reconfirm', async (req, reply) => {
+    const userId = authGuard(req, reply);
+    if (userId === null) return;
+
+    const requestId = Number(req.params.id);
+    if (!Number.isFinite(requestId) || !Number.isInteger(requestId) || requestId <= 0) {
+      reply.code(400).send({ error: 'invalid_id' });
+      return;
+    }
+
+    const member = await memberForUser(app.prisma, userId);
+    if (!member) {
+      reply.code(403).send({ error: 'not_in_household' });
+      return;
+    }
+
+    const allowed = await isBuyerByMember(app.prisma, member.id, requestId);
+    if (allowed === null) {
+      reply.code(404).send({ error: 'not_found' });
+      return;
+    }
+    if (!allowed) {
+      reply.code(403).send({ error: 'forbidden' });
+      return;
+    }
+
+    const actorId = member.id;
+
+    const updated = await transition(app.prisma, requestId, 'reconfirm', { actorId });
+    return { id: updated.id, status: updated.status, statusExpiresAt: updated.statusExpiresAt };
+  });
+
+  // ── POST /api/requests/:id/purchase ──────────────────────────────────────
+  //
+  // Buyer marks an approved request as purchased (approved → purchased).
+  // v1 reference: views.py purchase()
+  // TODO(Phase 6): fireEvent
+
+  app.post<{ Params: { id: string } }>('/api/requests/:id/purchase', async (req, reply) => {
+    const userId = authGuard(req, reply);
+    if (userId === null) return;
+
+    const requestId = Number(req.params.id);
+    if (!Number.isFinite(requestId) || !Number.isInteger(requestId) || requestId <= 0) {
+      reply.code(400).send({ error: 'invalid_id' });
+      return;
+    }
+
+    const member = await memberForUser(app.prisma, userId);
+    if (!member) {
+      reply.code(403).send({ error: 'not_in_household' });
+      return;
+    }
+
+    const allowed = await isBuyerByMember(app.prisma, member.id, requestId);
+    if (allowed === null) {
+      reply.code(404).send({ error: 'not_found' });
+      return;
+    }
+    if (!allowed) {
+      reply.code(403).send({ error: 'forbidden' });
+      return;
+    }
+
+    const actorId = member.id;
+
+    const updated = await transition(app.prisma, requestId, 'purchase', { actorId });
+    return { id: updated.id, status: updated.status, statusExpiresAt: updated.statusExpiresAt };
   });
 }
