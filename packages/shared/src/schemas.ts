@@ -98,3 +98,27 @@ export const CommentInputSchema = z.object({
   body: z.string().min(1, 'comment body is required').max(10_000, 'comment body is too long'),
 });
 export type CommentInput = z.infer<typeof CommentInputSchema>;
+
+// ── FileAppealInput ───────────────────────────────────────────────────────────
+
+/**
+ * Body of POST /api/appeals.
+ * `buyerId` is derived from the session — not in the body.
+ */
+export const FileAppealInputSchema = z.object({
+  requestId: z.number().int().positive(),
+  justification: z.string().min(1).max(10_000),
+});
+export type FileAppealInput = z.infer<typeof FileAppealInputSchema>;
+
+// ── ResolveAppealInput ────────────────────────────────────────────────────────
+
+/**
+ * Body of POST /api/appeals/:id/resolve.
+ * 'overturn' moves the request from denied → pending via appeal_overturned transition.
+ * 'uphold' marks the appeal upheld, leaving the request status unchanged.
+ */
+export const ResolveAppealInputSchema = z.object({
+  decision: z.enum(['overturn', 'uphold']),
+});
+export type ResolveAppealInput = z.infer<typeof ResolveAppealInputSchema>;

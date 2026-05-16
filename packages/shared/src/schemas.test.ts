@@ -5,6 +5,8 @@ import {
   EditRequestInputSchema,
   ApproverActionInputSchema,
   CommentInputSchema,
+  FileAppealInputSchema,
+  ResolveAppealInputSchema,
 } from './schemas.js';
 
 // ── RequestItemInput ──────────────────────────────────────────────────────────
@@ -238,5 +240,68 @@ describe('CommentInputSchema', () => {
 
   it('rejects a body exceeding 10,000 characters', () => {
     expect(() => CommentInputSchema.parse({ body: 'x'.repeat(10_001) })).toThrow();
+  });
+});
+
+// ── FileAppealInput ───────────────────────────────────────────────────────────
+
+describe('FileAppealInputSchema', () => {
+  it('parses a valid file appeal input', () => {
+    const result = FileAppealInputSchema.parse({
+      requestId: 42,
+      justification: 'I really need this.',
+    });
+    expect(result.requestId).toBe(42);
+    expect(result.justification).toBe('I really need this.');
+  });
+
+  it('rejects a missing justification', () => {
+    expect(() =>
+      FileAppealInputSchema.parse({ requestId: 1 }),
+    ).toThrow();
+  });
+
+  it('rejects an empty justification (min:1)', () => {
+    expect(() =>
+      FileAppealInputSchema.parse({ requestId: 1, justification: '' }),
+    ).toThrow();
+  });
+
+  it('rejects a non-positive requestId (0)', () => {
+    expect(() =>
+      FileAppealInputSchema.parse({ requestId: 0, justification: 'valid' }),
+    ).toThrow();
+  });
+
+  it('rejects a non-integer requestId (1.5)', () => {
+    expect(() =>
+      FileAppealInputSchema.parse({ requestId: 1.5, justification: 'valid' }),
+    ).toThrow();
+  });
+});
+
+// ── ResolveAppealInput ────────────────────────────────────────────────────────
+
+describe('ResolveAppealInputSchema', () => {
+  it('parses a valid overturn decision', () => {
+    const result = ResolveAppealInputSchema.parse({ decision: 'overturn' });
+    expect(result.decision).toBe('overturn');
+  });
+
+  it('parses a valid uphold decision', () => {
+    const result = ResolveAppealInputSchema.parse({ decision: 'uphold' });
+    expect(result.decision).toBe('uphold');
+  });
+
+  it('rejects an unknown decision', () => {
+    expect(() =>
+      ResolveAppealInputSchema.parse({ decision: 'dismiss' }),
+    ).toThrow();
+  });
+
+  it('rejects a missing decision', () => {
+    expect(() =>
+      ResolveAppealInputSchema.parse({}),
+    ).toThrow();
   });
 });
