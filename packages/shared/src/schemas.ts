@@ -175,3 +175,30 @@ export const UpdateNotificationPreferencesInputSchema = z.object({
   preferences: z.array(NotificationPreferenceInputSchema).min(1),
 });
 export type UpdateNotificationPreferencesInput = z.infer<typeof UpdateNotificationPreferencesInputSchema>;
+
+// ── HouseholdInviteInput ──────────────────────────────────────────────────────
+
+/**
+ * Body of POST /api/household/invite.
+ * `authentikUsername` is the Authentik username of the person to invite.
+ * Creates a PendingMembership row scoped to the caller's household.
+ */
+export const HouseholdInviteInputSchema = z.object({
+  authentikUsername: z.string().min(1).max(100),
+});
+export type HouseholdInviteInput = z.infer<typeof HouseholdInviteInputSchema>;
+
+// ── FeedbackInput ─────────────────────────────────────────────────────────────
+
+/**
+ * Body of POST /api/feedback.
+ * v1 has category, body (body text). We add title as a required field.
+ * category is optional, max 50 chars, matches v1's CATEGORIES list validation
+ * (but we allow any string ≤50 for flexibility — route can validate list membership).
+ */
+export const FeedbackInputSchema = z.object({
+  title: z.string().min(1).max(200),
+  body: z.string().min(1).max(10_000),
+  category: z.string().max(50).optional(),
+});
+export type FeedbackInput = z.infer<typeof FeedbackInputSchema>;

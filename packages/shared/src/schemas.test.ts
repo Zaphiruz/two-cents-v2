@@ -11,6 +11,8 @@ import {
   PushUnsubscribeInputSchema,
   NotificationPreferenceInputSchema,
   UpdateNotificationPreferencesInputSchema,
+  HouseholdInviteInputSchema,
+  FeedbackInputSchema,
 } from './schemas.js';
 
 // ── RequestItemInput ──────────────────────────────────────────────────────────
@@ -435,6 +437,80 @@ describe('UpdateNotificationPreferencesInputSchema', () => {
   it('rejects missing preferences field', () => {
     expect(() =>
       UpdateNotificationPreferencesInputSchema.parse({}),
+    ).toThrow();
+  });
+});
+
+// ── HouseholdInviteInput ──────────────────────────────────────────────────────
+
+describe('HouseholdInviteInputSchema', () => {
+  it('parses a valid authentikUsername', () => {
+    const result = HouseholdInviteInputSchema.parse({ authentikUsername: 'jsmith' });
+    expect(result.authentikUsername).toBe('jsmith');
+  });
+
+  it('rejects an empty authentikUsername (min:1)', () => {
+    expect(() => HouseholdInviteInputSchema.parse({ authentikUsername: '' })).toThrow();
+  });
+
+  it('rejects a username exceeding 100 characters (max:100)', () => {
+    expect(() =>
+      HouseholdInviteInputSchema.parse({ authentikUsername: 'a'.repeat(101) }),
+    ).toThrow();
+  });
+
+  it('rejects missing authentikUsername', () => {
+    expect(() => HouseholdInviteInputSchema.parse({})).toThrow();
+  });
+});
+
+// ── FeedbackInput ─────────────────────────────────────────────────────────────
+
+describe('FeedbackInputSchema', () => {
+  it('parses a valid feedback with all fields', () => {
+    const result = FeedbackInputSchema.parse({
+      title: 'Something broke',
+      body: 'It crashed when I clicked save.',
+      category: 'bug',
+    });
+    expect(result.title).toBe('Something broke');
+    expect(result.body).toBe('It crashed when I clicked save.');
+    expect(result.category).toBe('bug');
+  });
+
+  it('parses valid feedback without category (optional)', () => {
+    const result = FeedbackInputSchema.parse({
+      title: 'General feedback',
+      body: 'Love the app!',
+    });
+    expect(result.category).toBeUndefined();
+  });
+
+  it('rejects an empty title (min:1)', () => {
+    expect(() =>
+      FeedbackInputSchema.parse({ title: '', body: 'some body' }),
+    ).toThrow();
+  });
+
+  it('rejects an empty body (min:1)', () => {
+    expect(() =>
+      FeedbackInputSchema.parse({ title: 'Title', body: '' }),
+    ).toThrow();
+  });
+
+  it('rejects a category exceeding 50 characters (max:50)', () => {
+    expect(() =>
+      FeedbackInputSchema.parse({
+        title: 'Title',
+        body: 'Body',
+        category: 'x'.repeat(51),
+      }),
+    ).toThrow();
+  });
+
+  it('rejects a title exceeding 200 characters (max:200)', () => {
+    expect(() =>
+      FeedbackInputSchema.parse({ title: 't'.repeat(201), body: 'Body' }),
     ).toThrow();
   });
 });

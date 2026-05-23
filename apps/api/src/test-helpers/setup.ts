@@ -18,12 +18,20 @@ if (!process.env.VAPID_CLAIM_EMAIL) {
 }
 
 import { beforeEach, afterAll } from 'vitest';
+import IORedis from 'ioredis';
 import { clearDatabase, prisma } from './db.js';
+
+// Single Redis client for test-suite cleanup — one per singleFork worker.
+const testRedis = new IORedis(process.env.REDIS_URL!, { maxRetriesPerRequest: null });
 
 beforeEach(async () => {
   await clearDatabase();
+  // Flush Redis so rate-limit keys (and any other test state) don't leak
+  // between tests whose DB rows share the same auto-increment IDs after RESTART IDENTITY.
+  await testRedis.flushdb();
 });
 
 afterAll(async () => {
   await prisma.$disconnect();
+  await testRedis.quit();
 });
