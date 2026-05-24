@@ -1,7 +1,12 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { buildApp } from '../../buildApp.js';
 import { prisma } from '../../test-helpers/db.js';
 import { buildTestApp } from '../../test-helpers/session.js';
+import { fireEvent } from '../../services/events.js';
+
+vi.mock('../../services/events.js', () => ({
+  fireEvent: vi.fn().mockResolvedValue(undefined),
+}));
 
 async function seedAdmin() {
   const admin = await prisma.user.create({
@@ -168,6 +173,54 @@ describe('POST /api/admin/appeals/:id/resolve', () => {
     } finally {
       await app.close();
     }
+  });
+
+  describe('fires appeal_resolved event', () => {
+    beforeEach(() => {
+      vi.mocked(fireEvent).mockClear();
+    });
+
+    it('fires appeal_resolved with outcome=overturned on overturn', async () => {
+      const { app, sessionCookie } = await seedAdmin();
+      try {
+        const { appeal } = await seedHouseholdWithAppeal();
+        const res = await app.inject({
+          method: 'POST',
+          url: `/api/admin/appeals/${appeal.id}/resolve`,
+          headers: { cookie: sessionCookie },
+          payload: { decision: 'overturn' },
+        });
+        expect(res.statusCode).toBe(200);
+        expect(fireEvent).toHaveBeenCalledWith(
+          expect.anything(),
+          'appeal_resolved',
+          { appealId: appeal.id, outcome: 'overturned' },
+        );
+      } finally {
+        await app.close();
+      }
+    });
+
+    it('fires appeal_resolved with outcome=upheld on uphold', async () => {
+      const { app, sessionCookie } = await seedAdmin();
+      try {
+        const { appeal } = await seedHouseholdWithAppeal();
+        const res = await app.inject({
+          method: 'POST',
+          url: `/api/admin/appeals/${appeal.id}/resolve`,
+          headers: { cookie: sessionCookie },
+          payload: { decision: 'uphold' },
+        });
+        expect(res.statusCode).toBe(200);
+        expect(fireEvent).toHaveBeenCalledWith(
+          expect.anything(),
+          'appeal_resolved',
+          { appealId: appeal.id, outcome: 'upheld' },
+        );
+      } finally {
+        await app.close();
+      }
+    });
   });
 
   it('upholds the appeal and leaves request status unchanged (denied)', async () => {

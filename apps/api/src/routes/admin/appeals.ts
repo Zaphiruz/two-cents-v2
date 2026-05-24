@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import type { Prisma } from '@prisma/client';
 import { AdminListAppealsQuerySchema, AdminResolveAppealSchema } from '@two-cents/shared';
 import { transitionOnTx } from '../../lib/state.js';
+import { fireEvent } from '../../services/events.js';
 
 export default async function adminAppealsRoutes(app: FastifyInstance) {
   app.get('/api/admin/appeals', async (req) => {
@@ -100,6 +101,22 @@ export default async function adminAppealsRoutes(app: FastifyInstance) {
         }
         return updatedAppeal;
       });
+
+      // Fire appeal_resolved event — notify the buyer with the outcome.
+      // Mirrors the user-facing handler in apps/api/src/routes/appeals.ts.
+      // Wrapped in try/catch: notification failure must NOT 500 the admin's resolve action.
+      const outcome = body.decision === 'overturn' ? 'overturned' : 'upheld';
+      try {
+        await fireEvent(app.prisma, 'appeal_resolved', {
+          appealId: appeal.id,
+          outcome,
+        });
+      } catch (err) {
+        req.log.error(
+          { err, appealId: appeal.id, outcome },
+          'fireEvent appeal_resolved failed',
+        );
+      }
 
       return { appeal: updated };
     },
