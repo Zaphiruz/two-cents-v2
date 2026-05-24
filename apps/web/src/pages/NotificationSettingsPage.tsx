@@ -15,6 +15,13 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/components/ui/use-toast';
 import { ApiError, request } from '@/lib/api';
+import { urlBase64ToUint8Array } from '@/lib/push';
+
+type PushStatus =
+  | 'unsupported'
+  | 'denied'
+  | 'unsubscribed'
+  | 'subscribed';
 
 interface NotificationPreference {
   eventType: string;
@@ -142,6 +149,121 @@ export default function NotificationSettingsPage() {
     setEnabledMap((prev) => ({ ...prev, [eventType]: next }));
   }
 
+  // ---------- Push notifications ----------
+  const [pushStatus, setPushStatus] = React.useState<PushStatus>('unsubscribed');
+  const [pushBusy, setPushBusy] = React.useState(false);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    async function init() {
+      if (
+        typeof navigator === 'undefined' ||
+        typeof window === 'undefined' ||
+        !('serviceWorker' in navigator) ||
+        !('PushManager' in window)
+      ) {
+        if (!cancelled) setPushStatus('unsupported');
+        return;
+      }
+      if (
+        typeof Notification !== 'undefined' &&
+        Notification.permission === 'denied'
+      ) {
+        if (!cancelled) setPushStatus('denied');
+        return;
+      }
+      try {
+        const registration = await navigator.serviceWorker.ready;
+        const existing = await registration.pushManager.getSubscription();
+        if (cancelled) return;
+        setPushStatus(existing ? 'subscribed' : 'unsubscribed');
+      } catch {
+        if (!cancelled) setPushStatus('unsupported');
+      }
+    }
+    void init();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  function describePushError(err: unknown): string {
+    if (err instanceof ApiError) {
+      const body = err.body as { message?: unknown } | null;
+      if (body && typeof body.message === 'string') return body.message;
+      return err.message;
+    }
+    if (err instanceof Error) return err.message;
+    return 'Something went wrong';
+  }
+
+  async function handleEnablePush() {
+    setPushBusy(true);
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') {
+        setPushStatus(permission === 'denied' ? 'denied' : 'unsubscribed');
+        return;
+      }
+      const { publicKey } = await request<{ publicKey: string }>(
+        '/api/push/vapid',
+      );
+      const registration = await navigator.serviceWorker.ready;
+      const sub = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(publicKey) as BufferSource,
+      });
+      const json = sub.toJSON() as {
+        endpoint?: string;
+        keys?: { p256dh?: string; auth?: string };
+      };
+      const endpoint = json.endpoint ?? sub.endpoint;
+      const p256dh = json.keys?.p256dh ?? '';
+      const auth = json.keys?.auth ?? '';
+      await request('/api/push/subscribe', {
+        method: 'POST',
+        body: { endpoint, keys: { p256dh, auth } },
+      });
+      setPushStatus('subscribed');
+      toast({ title: 'Push notifications enabled.' });
+    } catch (err) {
+      toast({
+        title: 'Could not enable push notifications',
+        description: describePushError(err),
+        variant: 'destructive',
+      });
+    } finally {
+      setPushBusy(false);
+    }
+  }
+
+  async function handleDisablePush() {
+    setPushBusy(true);
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      const sub = await registration.pushManager.getSubscription();
+      if (!sub) {
+        setPushStatus('unsubscribed');
+        return;
+      }
+      await request('/api/push/unsubscribe', {
+        method: 'POST',
+        body: { endpoint: sub.endpoint },
+      });
+      await sub.unsubscribe();
+      setPushStatus('unsubscribed');
+      toast({ title: 'Push notifications disabled.' });
+    } catch (err) {
+      toast({
+        title: 'Could not disable push notifications',
+        description: describePushError(err),
+        variant: 'destructive',
+      });
+    } finally {
+      setPushBusy(false);
+    }
+  }
+
   function handleSave() {
     const validQuiet =
       quietStart.length > 0 &&
@@ -250,6 +372,42 @@ export default function NotificationSettingsPage() {
               onChange={(e) => setQuietEnd(e.target.value)}
             />
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Push notifications</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            {pushStatus === 'unsupported'
+              ? "Your browser doesn't support push notifications."
+              : pushStatus === 'denied'
+                ? 'Push notifications are blocked. Allow them in your browser settings.'
+                : pushStatus === 'subscribed'
+                  ? 'Push notifications are enabled on this device.'
+                  : 'Get push notifications on this device.'}
+          </p>
+          {pushStatus === 'unsubscribed' ? (
+            <Button
+              type="button"
+              onClick={handleEnablePush}
+              disabled={pushBusy}
+            >
+              {pushBusy ? 'Enabling…' : 'Enable push'}
+            </Button>
+          ) : null}
+          {pushStatus === 'subscribed' ? (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleDisablePush}
+              disabled={pushBusy}
+            >
+              {pushBusy ? 'Disabling…' : 'Disable push'}
+            </Button>
+          ) : null}
         </CardContent>
       </Card>
 

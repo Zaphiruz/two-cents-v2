@@ -76,6 +76,27 @@ describe('NotificationSettingsPage', () => {
     }
   });
 
+  it('shows the unsupported message and no Enable button when the browser lacks push APIs', async () => {
+    requestMock.mockResolvedValueOnce({ preferences: [] });
+
+    // jsdom does not provide serviceWorker on navigator nor PushManager on window
+    // by default, so the push effect should land in the 'unsupported' branch.
+    expect('serviceWorker' in navigator).toBe(false);
+    expect('PushManager' in window).toBe(false);
+
+    renderPage();
+
+    expect(
+      await screen.findByText(/your browser doesn't support push notifications/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /enable push/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /disable push/i }),
+    ).not.toBeInTheDocument();
+  });
+
   it('toggling a checkbox and saving PUTs the full preferences array with the new value', async () => {
     const user = userEvent.setup();
     requestMock.mockImplementation((path: string, options?: { method?: string }) => {
