@@ -1,7 +1,7 @@
 # Two Cents — Session Handoff
 
-**Date:** 2026-05-23
-**Audience:** a fresh Claude Code session picking up the v2 rewrite mid-flight
+**Date:** 2026-05-24 (refreshed)
+**Audience:** a fresh Claude Code session picking up the v2 codebase post-launch
 
 ---
 
@@ -9,48 +9,37 @@
 
 | Repo | Path | GitHub | State |
 |---|---|---|---|
-| v1 (production) | `d:/code/two-cents/` | [Zaphiruz/two-cents](https://github.com/Zaphiruz/two-cents) | Live at `https://two-cents.wispy-nook.casa`. Used daily by 3 people. Don't modify unless asked. |
-| v2 (this rewrite) | `d:/code/two-cents-v2/` | [Zaphiruz/two-cents-v2](https://github.com/Zaphiruz/two-cents-v2) | **Backend complete, on remote main at `e822214`.** Web app not started. |
+| v1 (retired) | `d:/code/two-cents/` | [Zaphiruz/two-cents](https://github.com/Zaphiruz/two-cents) | **Archived.** Containers stopped + removed; DB dropped; Vault wiped; runner deregistered. The GitHub repo is kept as historical reference only. All 18 issues were transferred to v2. |
+| v2 (this repo) | `d:/code/two-cents-v2/` | [Zaphiruz/two-cents-v2](https://github.com/Zaphiruz/two-cents-v2) | **Live in production** at `https://two-cents.wispy-nook.casa` since 2026-05-24. Auto-deploys on push to `main`. |
 
-**Active worktree:** `d:/code/two-cents-v2/.claude/worktrees/priceless-moser-c21b65/` on branch `claude/priceless-moser-c21b65`. Work in the worktree; the parent checkout's tree may be slightly out of sync.
+Work happens directly on `main` (or short feature branches that fast-forward back) — the project shifted out of mid-rewrite mode after cutover.
 
 ## Resume prompt for the next session
 
-> Continue the Two Cents v2 rewrite. Read this file first (`d:/code/two-cents-v2/HANDOFF.md`), then the plan at `docs/superpowers/plans/2026-05-03-two-cents-v2.md`. Phases 0–8 are complete and on main; **start at Phase 9 (Web bootstrap)**. Use `superpowers:subagent-driven-development`. v1 (production) at `d:/code/two-cents/` is reference only — don't modify it. The `gh` CLI is authenticated as `Zaphiruz`.
+> Two Cents v2 is in production. Read `d:/code/two-cents-v2/HANDOFF.md` for the current state. The 16-phase rewrite + v1 cutover + admin page (PR 1 & 2) are all shipped. For new feature work, brainstorm → spec → plan → subagent-driven-development. For bug fixes, just dispatch a small TDD subagent. `gh` CLI is authenticated as `Zaphiruz`.
 
 ---
 
 ## Phase progress
 
-| Phase | Status | Commit on main |
-|---|---|---|
-| 0. Bootstrap | ✅ done | `c9e6f6c` → `ef72968` |
-| 1. Domain layer (state/delays/resolution/saveRequestEdit/appeals services) | ✅ done | `0439524` → `de3bc7d` |
-| 2. Fastify skeleton (plugins + healthz + central error handler) | ✅ done | `81af0b3` |
-| 3. Auth (Authentik OIDC + iron-session + userSync) | ✅ done | `77d7ce3` |
-| 4. Requests API (9 endpoints + permissions) | ✅ done | `9934d22` |
-| 5. Appeals API (3 endpoints) | ✅ done | `e58d67e` |
-| 6. Notifications API (jwt + push + notify + events + qa/prefs + fireEvent wiring) | ✅ done | `87a40ad` |
-| 7. Households + feedback API (4 endpoints + GitHub integration) | ✅ done | `e822214` |
-| 8. Workers + scheduler (6 BullMQ scheduled jobs) | ✅ done | `d371438` |
-| **9. Web bootstrap** | **next** | — |
-| 10. Web request flows (6 sub-tasks) | ahead | — |
-| 11. Web appeals + settings + household + feedback UIs | ahead | — |
-| 12. Web PWA shell (manifest, sw, share-target, iOS hint, push registration) | ahead | — |
-| 13. Polish parity (badges, timestamps, currency, delay preview, toasts, empty states) | ahead | — |
-| 14. Deploy (Dockerfiles, compose, nginx, Vault, runner, deploy workflow) | **user-driven** | — |
-| 15. Cutover (nginx flip, retire v1, brief downtime) | **user-driven** | — |
-| 16. Restore Claude Code permissions (revert temp bypass; curate allow list) | **user-driven** | — |
+All phases of the rewrite + cutover are complete. Two follow-on PRs added the admin page.
 
-**Tests:** 268 API + 64 shared = **332** total at HEAD. `tsc --noEmit` clean across both packages.
+| Phase | Status |
+|---|---|
+| 0-8. Backend (bootstrap, domain, Fastify, auth, requests, appeals, notifications, households+feedback, workers) | ✅ shipped |
+| 9-13. Web (bootstrap, request flows, appeals/settings/household/feedback UIs, PWA, polish) | ✅ shipped |
+| 14. Deploy (Dockerfiles, compose.prod, fetch-secrets, GH Actions, S2 runner) | ✅ shipped |
+| 15. Cutover (v1 → v2 data migration, port flip, v1 wipe) | ✅ shipped 2026-05-24 |
+| Admin page PR 1 (Foundation + People + Households + Appeals) | ✅ shipped 2026-05-24 |
+| Admin page PR 2 (Feedback + Audit Search) | ✅ shipped 2026-05-24 |
 
-**Deferred:** GitHub Actions CI workflow (Task 0.6 of original plan). Needs `gh auth refresh --hostname github.com --scopes workflow` then a small commit. Not blocking; running tests locally has been the workflow.
+**Tests at HEAD:** 319 api + 95 web + 79 shared = **493 total**. All green. `tsc --noEmit` clean across all packages.
 
 ---
 
-## Backend API surface (complete)
+## Backend API surface
 
-All routes under `/api`. The web app (Phase 9+) consumes these.
+All routes under `/api`. The web app consumes these.
 
 | Route | Auth | Notes |
 |---|---|---|
@@ -80,6 +69,25 @@ All routes under `/api`. The web app (Phase 9+) consumes these.
 | `POST /household/invite` | session | `{authentikUsername, approvalMode}` |
 | `POST /feedback` | session, 1/min/user | `{title, body, category?}`; best-effort GitHub Issue |
 | `GET /feedback` | session | caller's submissions with live GitHub state |
+| `GET /admin/users` | admin | list (q/isAdmin filters, cursor pagination) |
+| `GET /admin/users/:id/detail` | admin | drawer payload: user + household + recent requests/comments/push subs/log |
+| `POST /admin/users/:id/test-push` | admin | fire a test web-push to all of the user's subs |
+| `DELETE /admin/users/:id/push-subscriptions` | admin | bulk-delete |
+| `GET /admin/users/unassigned` | admin | users not in any household (for member picker) |
+| `GET /admin/households` | admin | list with member counts |
+| `PATCH /admin/households/:id` | admin | name + quota |
+| `GET /admin/households/:id/detail` | admin | household + members + buyer-approver pairs |
+| `POST /admin/households/:id/members` | admin | add user (`{userId, approvalMode}`) |
+| `PATCH /admin/household-members/:id` | admin | change approval mode |
+| `DELETE /admin/household-members/:id` | admin | removes member + cascades buyer-approver rows |
+| `PUT /admin/buyer-approvers` | admin | idempotent upsert of (buyerId, approverId) |
+| `DELETE /admin/buyer-approvers/:id` | admin | |
+| `GET /admin/appeals` | admin | cross-household list with filters |
+| `POST /admin/appeals/:id/resolve` | admin | overturn/uphold; fires `appeal_resolved` event same as user flow |
+| `GET /admin/feedback` | admin | list with category + hasGhIssue filters |
+| `GET /admin/search?q=&type=` | admin | unified text search across Request/Comment/NotificationLog/PushSubscription/ConsumedJWTJti |
+
+`/api/admin/*` routes are all gated by the `requireAdmin` Fastify preHandler registered at the admin plugin level (`apps/api/src/routes/admin/index.ts`). 401 if unauthenticated, 403 if not in the `two-cents-admins` Authentik group.
 
 **Error handler maps:** `ZodError` → 400, `IllegalTransition` → 409, `QuotaExceeded` → 422, `JWTInvalidError` → 400, `JWTReplayError` → 409, `GitHubAuthError`/`GitHubAPIError` → 502, `GitHubNotConfigured` → 503, Prisma `P2025` → 404, `P2002` → 409.
 
@@ -203,74 +211,47 @@ Global config has `commit.gpgsign=true` (SSH format) but the SSH signing key isn
 
 ---
 
-## What's left (Phases 9–16)
+## Active follow-ups
 
-### Phase 9 — Web bootstrap (next)
+Open items from the admin page reviews and the broader project punch list. None block — these are the next things worth picking up if you're looking for work.
 
-Fill in `apps/web/` (currently just a Phase 0 placeholder showing "Two Cents v2"):
-- shadcn/ui init + 11 primitives (button/input/label/textarea/select/dialog/dropdown-menu/toast/badge/separator/card)
-- `lib/api.ts` — thin fetch wrapper with `credentials: 'include'`
-- `lib/queryClient.ts` — TanStack Query setup
-- `lib/auth.tsx` — `useUser()` hook + `AuthProvider` + `loginRedirect()`/`logout()` helpers
-- `App.tsx` — router with placeholder routes (10 routes)
-- `components/Layout.tsx` + `components/Nav.tsx`
-- Add `@testing-library/react` + `jsdom` + vitest config for web
+**From admin page PR 2 final review:**
+- **`raw` field whitelisting in `/api/admin/search`** — currently dumps the full Prisma row as JSON to the drawer. Fine for an admin tool but susceptible to silent leakage if schema fields are added later. Consider a per-type zod whitelist before returning.
+- **`oidcSubject` column on Feedback page** — spec wanted "name + truncated oidc_subject"; we shipped name only. Add if needed for disambiguation.
+- **Per-page 403 redirect tests** for AdminFeedbackPage and AdminSearchPage — `RequireAdmin` already gates the route subtree, so only matters for mid-session admin flag flips.
+- **Unused `buildApp` imports** in `apps/api/src/routes/admin/{feedback,search}.test.ts` — trivial cleanup.
 
-Single dispatch. Don't push yet — phase boundary push is after.
+**Open user feedback (deferred from before admin work):**
+- **#14** (UX: forms need clearer post-submit feedback) — cross-cutting pattern across multiple forms; baked into v2 partially but worth a sweep
+- **#15** (remove-item checkbox doesn't disable form validation) — bug
+- **#16** (line-item format shows `####` not `##.##`) — money formatting regression sibling of resolved #2
+- **#17** (Gladis: "Can't submit request :(") — low detail; needs repro
+- **#18** (View past resolved items) — feature request
 
-### Phase 10 — Web request flows
-
-6 sub-tasks. After Phase 9 lands, these can be parallelized:
-- Queue page
-- New request form (multi-item via `useFieldArray`)
-- Detail page
-- Edit page
-- Approver action component
-- Comments component
-
-### Phases 11, 12, 13 — sequential
-
-- 11: appeals queue/file + notification settings + household + feedback UIs
-- 12: PWA (manifest, sw, share-target, iOS install hint, push registration)
-- 13: polish parity (badges, timestamps, currency formatting, delay preview, 409 toast handler, loading states, empty states)
-
-### Phases 14, 15, 16 — user-driven
-
-These require Jacob's hands:
-- 14: deploy infrastructure on S2 (Dockerfiles, compose, nginx, Vault provisioning, Authentik app creation, GitHub Actions self-hosted runner setup)
-- 15: cutover (backup v1, flip nginx, retire v1 container)
-- 16: revert temporary `bypassPermissions` Claude Code config + curate allow list (see plan)
-
----
-
-## Carried punch list
-
-- **Form-submit UX feedback** ([v1 issue #14](https://github.com/Zaphiruz/two-cents/issues/14)) — broader pattern; bake into v2 from start (loading states, success toasts, optimistic updates)
-- **Coverage gate** — v1 CI uses `--cov-fail-under=0`. v2 CI not yet enabled (deferred Phase 0 task); when enabled, set a real floor (70%+)
-- **GPG/SSH commit signing** — config issue on user's side; commits land unsigned
-- **iOS install hint detection** — was based on `navigator.standalone`; verify it still triggers correctly on iOS 18+
-- **Test flakiness flag** — both Phase 7 and 8 implementers reported intermittent FK constraint failures during full-suite runs (concurrent TRUNCATE in single-fork mode). Individual files pass cleanly; full suite occasionally fails on `state.test.ts` or `requests.test.ts`. Investigate before Phase 14 deploy if it persists.
+**General:**
+- **Deploy workflow paths-ignore** — currently every push to `main` (including docs-only) triggers a rebuild + redeploy. Adding `paths-ignore: [docs/**, '*.md']` to `.github/workflows/deploy.yml` would save ~2 min per docs commit.
+- **Coverage gate** — never wired up. If you want a CI threshold, vitest can emit lcov; pick a floor (70%+ seems sane for this codebase).
+- **GPG/SSH commit signing** — config issue on user's side; commits land unsigned. Workaround `-c commit.gpgsign=false`.
+- **Test flakiness watch** — early phases reported occasional FK constraint failures during full-suite runs under concurrent TRUNCATE. Hasn't reappeared during admin work; flag if it does.
 
 ---
 
 ## Don't do
 
-- Don't modify v1 (`d:/code/two-cents/`) unless explicitly asked
 - Don't touch `commit.gpgsign` config — work around with `-c commit.gpgsign=false`
 - Don't paste secrets into the chat
-- Don't run destructive commands on S2 without confirming (especially anything touching `/opt/two-cents/` or its database — that's live production until cutover)
+- Don't run destructive commands on S2 without confirming. The new at-risk paths are `/opt/two-cents-v2/`, the `two_cents_v2` Postgres DB, and `secret/data/two-cents-v2` in Vault — those are production now.
 - Don't push via SSH (`git@github.com:...`) — agent is often unreachable; use the gh-token HTTPS pattern above
-- Don't burn context reading every v1 file. Read what the current task requires.
-- Don't dispatch parallel subagents that touch the same files. Two backend phases (7+8) ran in parallel safely because their file scopes were disjoint; web phases (9-13) are NOT parallelizable for the most part.
-- Don't auto-revert the `defaultMode: "bypassPermissions"` setting in `.claude/settings.local.json` if it reappears — it's intentional (was user's choice for this session, removed/re-added per user preference; Phase 16 cleans up at end of project).
+- Don't dispatch parallel subagents that touch the same files. Disjoint scopes are fine; same file → conflicts.
+- Don't auto-revert the `defaultMode: "bypassPermissions"` setting in `.claude/settings.local.json` if it reappears — user's call.
 
 ---
 
 ## Files to read first when picking up
 
-1. **`docs/superpowers/plans/2026-05-03-two-cents-v2.md`** — the 16-phase implementation plan (Phase 9 is what's next)
-2. **`docs/superpowers/specs/2026-04-28-two-cents-design.md`** — v1 design (state machine, models, business rules)
-3. **`docs/purchase-request-app-spec.md`** — product spec
-4. **Phase status memory files** at `~/.claude/projects/D--code-two-cents-v2/memory/phase_{0..6}_status.md` (and Phase 7+8 may exist by next session)
+1. **`docs/purchase-request-app-spec.md`** — product spec (what the app does)
+2. **`docs/superpowers/specs/2026-05-24-admin-page-design.md`** — admin page architecture
+3. **`docs/superpowers/specs/2026-04-28-two-cents-design.md`** — v1 design (state machine, models, business rules — still authoritative for those)
+4. **Phase status memory files** at `~/.claude/projects/D--code-two-cents-v2/memory/` (one per shipped phase; the index is `MEMORY.md`)
 
-For Phase 9 UX inspiration, v1's Django templates live at `d:/code/two-cents/apps/*/templates/` — but v2's UI is a fresh design; use the templates only to understand navigation structure, not for visual reference.
+For visual reference on existing UI patterns, browse the current SPA at `https://two-cents.wispy-nook.casa` or read `apps/web/src/pages/`.

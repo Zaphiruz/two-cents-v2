@@ -2,10 +2,15 @@
 
 TypeScript rewrite of [Two Cents](https://github.com/Zaphiruz/two-cents). Fastify API + Vite/React SPA + Prisma + BullMQ.
 
-- Spec: [docs/purchase-request-app-spec.md](docs/purchase-request-app-spec.md)
-- v1 design: [docs/superpowers/specs/2026-04-28-two-cents-design.md](docs/superpowers/specs/2026-04-28-two-cents-design.md)
-- Implementation plan: [docs/superpowers/plans/2026-05-03-two-cents-v2.md](docs/superpowers/plans/2026-05-03-two-cents-v2.md)
-- **Drop-in cutover from v1**: [docs/v1-cutover.md](docs/v1-cutover.md)
+**Status:** live in production at `https://two-cents.wispy-nook.casa` since 2026-05-24. v1 fully wiped post-cutover; only the old GitHub repo remains as an archive. Auto-deploys on push to `main` via GitHub Actions → self-hosted runner on S2.
+
+**Admin page:** `/admin/*` is available to users in the Authentik group `two-cents-admins`. Five sections: People, Households, Appeals, Feedback (links to GitHub issues), Audit Search (cross-model text search). See [docs/superpowers/specs/2026-05-24-admin-page-design.md](docs/superpowers/specs/2026-05-24-admin-page-design.md).
+
+- Product spec: [docs/purchase-request-app-spec.md](docs/purchase-request-app-spec.md)
+- v1 design (reference): [docs/superpowers/specs/2026-04-28-two-cents-design.md](docs/superpowers/specs/2026-04-28-two-cents-design.md)
+- Rewrite plan (Phases 0-13): [docs/superpowers/plans/2026-05-03-two-cents-v2.md](docs/superpowers/plans/2026-05-03-two-cents-v2.md)
+- Admin page plans: [PR 1](docs/superpowers/plans/2026-05-24-admin-page-pr1.md) · [PR 2](docs/superpowers/plans/2026-05-24-admin-page-pr2.md)
+- Drop-in cutover from v1 (historical): [docs/v1-cutover.md](docs/v1-cutover.md)
 
 ## Local development
 
@@ -33,9 +38,9 @@ The seed creates a "Dev Household" with three members: **admin** (admin), **Bob*
 
 ## Production deploy (S2)
 
-See [docs/v1-cutover.md](docs/v1-cutover.md) for the full drop-in replacement steps.
+Deploys are automatic on push to `main`. The bootstrap below ran on 2026-05-24 and is kept here for disaster recovery / re-provisioning. See [docs/v1-cutover.md](docs/v1-cutover.md) for the full historical drop-in replacement steps.
 
-Bootstrap checklist (one-time):
+Bootstrap checklist (one-time, already done):
 
 1. **Postgres** (S2): create user + DB on shared-infra
    ```bash
@@ -73,4 +78,4 @@ pnpm --filter @two-cents/web test
 pnpm --filter @two-cents/shared test
 ```
 
-Total at HEAD: 332 api + 69 web + 64 shared.
+Total at HEAD: 319 api + 95 web + 79 shared.
