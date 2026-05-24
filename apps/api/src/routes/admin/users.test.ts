@@ -107,3 +107,70 @@ describe('GET /api/admin/users', () => {
     }
   });
 });
+
+describe('GET /api/admin/users/:id/detail', () => {
+  it('returns 404 for unknown user id', async () => {
+    const { app, sessionCookie } = await seedAdmin();
+    try {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/admin/users/99999/detail',
+        headers: { cookie: sessionCookie },
+      });
+      expect(res.statusCode).toBe(404);
+      expect(res.json()).toMatchObject({ error: 'not_found' });
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('returns user profile + household + recent requests/comments/push/log', async () => {
+    const { app, sessionCookie } = await seedAdmin();
+    try {
+      const household = await prisma.household.create({
+        data: { name: 'Casa', appealQuotaCount: 1, appealQuotaPeriod: 'monthly' },
+      });
+      const user = await prisma.user.create({
+        data: { oidcSubject: 'u-detail', name: 'Detail User', isAdmin: false },
+      });
+      const member = await prisma.householdMember.create({
+        data: { userId: user.id, householdId: household.id, approvalMode: 'any' },
+      });
+      const req1 = await prisma.request.create({
+        data: {
+          householdId: household.id,
+          buyerId: member.id,
+          title: 'A request',
+          buyerSeriousness: 'need',
+          status: 'pending',
+        },
+      });
+      await prisma.comment.create({
+        data: { requestId: req1.id, authorId: user.id, body: 'a comment' },
+      });
+      await prisma.pushSubscription.create({
+        data: { userId: user.id, endpoint: 'https://x/1', p256dh: 'p', auth: 'a' },
+      });
+      await prisma.notificationLog.create({
+        data: { userId: user.id, eventKey: 'request.created' },
+      });
+
+      const res = await app.inject({
+        method: 'GET',
+        url: `/api/admin/users/${user.id}/detail`,
+        headers: { cookie: sessionCookie },
+      });
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.user).toMatchObject({ id: user.id, name: 'Detail User', isAdmin: false });
+      expect(body.household).toMatchObject({ id: household.id, name: 'Casa', approvalMode: 'any' });
+      expect(body.requests).toHaveLength(1);
+      expect(body.requests[0]).toMatchObject({ title: 'A request' });
+      expect(body.comments).toHaveLength(1);
+      expect(body.pushSubscriptions).toHaveLength(1);
+      expect(body.notificationLogs).toHaveLength(1);
+    } finally {
+      await app.close();
+    }
+  });
+});

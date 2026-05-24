@@ -46,4 +46,74 @@ export default async function adminUsersRoutes(app: FastifyInstance) {
       nextCursor: hasMore ? slice[slice.length - 1].id : null,
     };
   });
+
+  app.get<{ Params: { id: string } }>('/api/admin/users/:id/detail', async (req, reply) => {
+    const userId = Number(req.params.id);
+    if (!Number.isFinite(userId)) {
+      return reply.code(400).send({ error: 'invalid_id' });
+    }
+
+    const user = await app.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, oidcSubject: true, name: true, isAdmin: true, createdAt: true },
+    });
+    if (!user) {
+      return reply.code(404).send({ error: 'not_found' });
+    }
+
+    const membership = await app.prisma.householdMember.findFirst({
+      where: { userId },
+      select: {
+        id: true,
+        approvalMode: true,
+        joinedAt: true,
+        household: { select: { id: true, name: true } },
+      },
+    });
+
+    const [requests, comments, pushSubs, logs] = await Promise.all([
+      membership
+        ? app.prisma.request.findMany({
+            where: { buyerId: membership.id },
+            orderBy: { id: 'desc' },
+            take: 20,
+            select: { id: true, title: true, status: true, createdAt: true },
+          })
+        : Promise.resolve([]),
+      app.prisma.comment.findMany({
+        where: { authorId: userId },
+        orderBy: { id: 'desc' },
+        take: 20,
+        select: { id: true, requestId: true, body: true, createdAt: true },
+      }),
+      app.prisma.pushSubscription.findMany({
+        where: { userId },
+        orderBy: { id: 'desc' },
+        select: { id: true, endpoint: true, createdAt: true },
+      }),
+      app.prisma.notificationLog.findMany({
+        where: { userId },
+        orderBy: { id: 'desc' },
+        take: 50,
+        select: { id: true, eventKey: true, sentAt: true },
+      }),
+    ]);
+
+    return {
+      user,
+      household: membership
+        ? {
+            id: membership.household.id,
+            name: membership.household.name,
+            memberId: membership.id,
+            approvalMode: membership.approvalMode,
+            joinedAt: membership.joinedAt,
+          }
+        : null,
+      requests,
+      comments,
+      pushSubscriptions: pushSubs,
+      notificationLogs: logs,
+    };
+  });
 }
