@@ -12,16 +12,15 @@ RUN pnpm --filter @two-cents/api prisma:generate
 RUN pnpm --filter @two-cents/api build
 
 # ---- runtime ----
+# Preserve the /repo workspace layout so pnpm's symlinked node_modules resolve
+# (apps/api/node_modules/prisma → ../../../node_modules/.pnpm/...).
 FROM node:22-alpine AS app
-WORKDIR /app
+WORKDIR /repo/apps/api
 RUN apk add --no-cache openssl
-RUN corepack enable
-COPY --from=build /repo/apps/api/dist ./dist
-COPY --from=build /repo/apps/api/package.json ./
-COPY --from=build /repo/apps/api/node_modules ./node_modules
-COPY --from=build /repo/packages/shared ./packages/shared
-COPY --from=build /repo/apps/api/prisma ./prisma
-COPY apps/api/entrypoint.mjs ./entrypoint.mjs
+COPY --from=build /repo/node_modules /repo/node_modules
+COPY --from=build /repo/package.json /repo/pnpm-workspace.yaml /repo/
+COPY --from=build /repo/packages/shared /repo/packages/shared
+COPY --from=build /repo/apps/api /repo/apps/api
 EXPOSE 4000
 # Default to api; worker overrides CMD in compose.
 CMD ["node", "entrypoint.mjs", "dist/server.js"]
