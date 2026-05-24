@@ -3,6 +3,7 @@ import {
   AdminAddHouseholdMemberSchema,
   AdminUpdateHouseholdMemberSchema,
   AdminUpdateHouseholdSchema,
+  AdminUpsertBuyerApproverSchema,
 } from '@two-cents/shared';
 
 export default async function adminHouseholdsRoutes(app: FastifyInstance) {
@@ -127,6 +128,35 @@ export default async function adminHouseholdsRoutes(app: FastifyInstance) {
         }),
         app.prisma.householdMember.delete({ where: { id: memberId } }),
       ]);
+      return { deleted: 1 };
+    },
+  );
+
+  app.put('/api/admin/buyer-approvers', async (req) => {
+    const body = AdminUpsertBuyerApproverSchema.parse(req.body);
+    const existing = await app.prisma.buyerApprover.findFirst({
+      where: { buyerId: body.buyerId, approverId: body.approverId },
+      select: { id: true, buyerId: true, approverId: true },
+    });
+    if (existing) return { buyerApprover: existing };
+    const created = await app.prisma.buyerApprover.create({
+      data: { buyerId: body.buyerId, approverId: body.approverId },
+      select: { id: true, buyerId: true, approverId: true },
+    });
+    return { buyerApprover: created };
+  });
+
+  app.delete<{ Params: { id: string } }>(
+    '/api/admin/buyer-approvers/:id',
+    async (req, reply) => {
+      const id = Number(req.params.id);
+      if (!Number.isFinite(id)) return reply.code(400).send({ error: 'invalid_id' });
+      const existing = await app.prisma.buyerApprover.findUnique({
+        where: { id },
+        select: { id: true },
+      });
+      if (!existing) return reply.code(404).send({ error: 'not_found' });
+      await app.prisma.buyerApprover.delete({ where: { id } });
       return { deleted: 1 };
     },
   );
