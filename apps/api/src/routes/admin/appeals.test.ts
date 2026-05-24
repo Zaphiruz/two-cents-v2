@@ -109,3 +109,83 @@ describe('GET /api/admin/appeals', () => {
     }
   });
 });
+
+describe('POST /api/admin/appeals/:id/resolve', () => {
+  it('returns 404 for unknown appeal id', async () => {
+    const { app, sessionCookie } = await seedAdmin();
+    try {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/admin/appeals/99999/resolve',
+        headers: { cookie: sessionCookie },
+        payload: { decision: 'overturn' },
+      });
+      expect(res.statusCode).toBe(404);
+      expect(res.json()).toMatchObject({ error: 'not_found' });
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('returns 409 if appeal is already resolved', async () => {
+    const { app, sessionCookie } = await seedAdmin();
+    try {
+      const { appeal } = await seedHouseholdWithAppeal();
+      await prisma.appeal.update({
+        where: { id: appeal.id },
+        data: { status: 'upheld', resolvedAt: new Date() },
+      });
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/admin/appeals/${appeal.id}/resolve`,
+        headers: { cookie: sessionCookie },
+        payload: { decision: 'overturn' },
+      });
+      expect(res.statusCode).toBe(409);
+      expect(res.json()).toMatchObject({ error: 'already_resolved' });
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('overturns the appeal and transitions request from denied to pending', async () => {
+    const { app, sessionCookie } = await seedAdmin();
+    try {
+      const { appeal, request } = await seedHouseholdWithAppeal();
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/admin/appeals/${appeal.id}/resolve`,
+        headers: { cookie: sessionCookie },
+        payload: { decision: 'overturn' },
+      });
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.appeal).toMatchObject({ id: appeal.id, status: 'overturned' });
+      expect(body.appeal.resolvedAt).not.toBeNull();
+      const updatedReq = await prisma.request.findUnique({ where: { id: request.id } });
+      // appeal_overturned state-machine transition: denied -> pending
+      expect(updatedReq?.status).toBe('pending');
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('upholds the appeal and leaves request status unchanged (denied)', async () => {
+    const { app, sessionCookie } = await seedAdmin();
+    try {
+      const { appeal, request } = await seedHouseholdWithAppeal();
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/admin/appeals/${appeal.id}/resolve`,
+        headers: { cookie: sessionCookie },
+        payload: { decision: 'uphold' },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().appeal.status).toBe('upheld');
+      const updatedReq = await prisma.request.findUnique({ where: { id: request.id } });
+      expect(updatedReq?.status).toBe('denied');
+    } finally {
+      await app.close();
+    }
+  });
+});
