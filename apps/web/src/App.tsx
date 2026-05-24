@@ -15,6 +15,11 @@ import HouseholdPage from '@/pages/HouseholdPage';
 import FeedbackPage from '@/pages/FeedbackPage';
 import NewFeedbackPage from '@/pages/NewFeedbackPage';
 import ShareTargetPage from '@/pages/ShareTargetPage';
+import RequireAdmin from './pages/admin/RequireAdmin';
+import AdminLayout from './pages/admin/AdminLayout';
+import PeoplePage from './pages/admin/PeoplePage';
+import HouseholdsPage from './pages/admin/HouseholdsPage';
+import AdminAppealsPage from './pages/admin/AdminAppealsPage';
 
 export default function App() {
   return (
@@ -40,7 +45,12 @@ export default function App() {
               <Route path="feedback/new" element={<NewFeedbackPage />} />
               <Route path="feedback" element={<FeedbackPage />} />
               <Route path="share-target" element={<ShareTargetPage />} />
-              <Route path="admin" element={<div className="p-6">Admin (coming soon)</div>} />
+              <Route path="admin" element={<RequireAdmin><AdminLayout /></RequireAdmin>}>
+                <Route index element={<Navigate to="people" replace />} />
+                <Route path="people" element={<PeoplePage />} />
+                <Route path="households" element={<HouseholdsPage />} />
+                <Route path="appeals" element={<AdminAppealsPage />} />
+              </Route>
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
           </Routes>
