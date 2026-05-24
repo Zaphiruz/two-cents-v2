@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { AdminListUsersQuerySchema } from '@two-cents/shared';
+import { sendPushNotification, PushSubscriptionExpiredError } from '../../lib/push.js';
 
 export default async function adminUsersRoutes(app: FastifyInstance) {
   app.get('/api/admin/users', async (req) => {
@@ -116,4 +117,72 @@ export default async function adminUsersRoutes(app: FastifyInstance) {
       notificationLogs: logs,
     };
   });
+
+  app.post<{ Params: { id: string } }>(
+    '/api/admin/users/:id/test-push',
+    async (req, reply) => {
+      const userId = Number(req.params.id);
+      if (!Number.isFinite(userId)) {
+        return reply.code(400).send({ error: 'invalid_id' });
+      }
+      const user = await app.prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true },
+      });
+      if (!user) {
+        return reply.code(404).send({ error: 'not_found' });
+      }
+
+      const subs = await app.prisma.pushSubscription.findMany({
+        where: { userId },
+      });
+
+      const payload = {
+        title: 'Test push from admin',
+        body: 'If you can see this, push delivery is working.',
+      };
+
+      let sent = 0;
+      let failed = 0;
+      const errors: string[] = [];
+
+      const results = await Promise.allSettled(
+        subs.map((sub) =>
+          sendPushNotification(
+            { endpoint: sub.endpoint, p256dh: sub.p256dh, auth: sub.auth },
+            payload,
+          ).then(() => ({ subId: sub.id })),
+        ),
+      );
+
+      for (let i = 0; i < results.length; i++) {
+        const r = results[i]!;
+        const sub = subs[i]!;
+        if (r.status === 'fulfilled') {
+          sent++;
+        } else {
+          failed++;
+          const err = r.reason;
+          if (err instanceof PushSubscriptionExpiredError) {
+            errors.push(`expired: ${sub.endpoint}`);
+            await app.prisma.pushSubscription
+              .delete({ where: { id: sub.id } })
+              .catch(() => {
+                // ignore race: already deleted
+              });
+          } else {
+            const msg = err instanceof Error ? err.message : String(err);
+            errors.push(msg);
+          }
+        }
+      }
+
+      const result: { sent: number; failed: number; errors?: string[] } = {
+        sent,
+        failed,
+      };
+      if (errors.length > 0) result.errors = errors;
+      return result;
+    },
+  );
 }

@@ -1,7 +1,20 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+
+// Mock sendPushNotification before importing the route module (hoisted).
+vi.mock('../../lib/push.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../lib/push.js')>();
+  return {
+    ...actual,
+    sendPushNotification: vi.fn().mockResolvedValue(undefined),
+  };
+});
+
 import { buildApp } from '../../buildApp.js';
 import { prisma } from '../../test-helpers/db.js';
 import { buildTestApp } from '../../test-helpers/session.js';
+import { sendPushNotification } from '../../lib/push.js';
+
+const sendPushMock = vi.mocked(sendPushNotification);
 
 async function seedAdmin() {
   const admin = await prisma.user.create({
@@ -169,6 +182,61 @@ describe('GET /api/admin/users/:id/detail', () => {
       expect(body.comments).toHaveLength(1);
       expect(body.pushSubscriptions).toHaveLength(1);
       expect(body.notificationLogs).toHaveLength(1);
+    } finally {
+      await app.close();
+    }
+  });
+});
+
+describe('POST /api/admin/users/:id/test-push', () => {
+  it('returns 404 if user does not exist', async () => {
+    sendPushMock.mockReset();
+    sendPushMock.mockResolvedValue(undefined);
+    const { app, sessionCookie } = await seedAdmin();
+    try {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/admin/users/99999/test-push',
+        headers: { cookie: sessionCookie },
+      });
+      expect(res.statusCode).toBe(404);
+      expect(res.json()).toMatchObject({ error: 'not_found' });
+      expect(sendPushMock).not.toHaveBeenCalled();
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('returns 200 with delivery counts when user has subscriptions', async () => {
+    sendPushMock.mockReset();
+    sendPushMock.mockResolvedValue(undefined);
+    const { app, sessionCookie } = await seedAdmin();
+    try {
+      const user = await prisma.user.create({
+        data: { oidcSubject: 'push-user', name: 'Push', isAdmin: false },
+      });
+      await prisma.pushSubscription.createMany({
+        data: [
+          { userId: user.id, endpoint: 'https://push.example/1', p256dh: 'p1', auth: 'a1' },
+          { userId: user.id, endpoint: 'https://push.example/2', p256dh: 'p2', auth: 'a2' },
+        ],
+      });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/admin/users/${user.id}/test-push`,
+        headers: { cookie: sessionCookie },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ sent: 2, failed: 0 });
+      expect(sendPushMock).toHaveBeenCalledTimes(2);
+      expect(sendPushMock).toHaveBeenCalledWith(
+        expect.objectContaining({ endpoint: expect.any(String), p256dh: expect.any(String), auth: expect.any(String) }),
+        expect.objectContaining({
+          title: 'Test push from admin',
+          body: 'If you can see this, push delivery is working.',
+        }),
+      );
     } finally {
       await app.close();
     }
