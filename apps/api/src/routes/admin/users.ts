@@ -48,6 +48,15 @@ export default async function adminUsersRoutes(app: FastifyInstance) {
     };
   });
 
+  app.get('/api/admin/users/unassigned', async () => {
+    const users = await app.prisma.user.findMany({
+      where: { memberships: { none: {} } },
+      orderBy: { name: 'asc' },
+      select: { id: true, name: true, oidcSubject: true },
+    });
+    return { users };
+  });
+
   app.get<{ Params: { id: string } }>('/api/admin/users/:id/detail', async (req, reply) => {
     const userId = Number(req.params.id);
     if (!Number.isFinite(userId)) {

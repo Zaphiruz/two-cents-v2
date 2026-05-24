@@ -121,6 +121,39 @@ describe('GET /api/admin/users', () => {
   });
 });
 
+describe('GET /api/admin/users/unassigned', () => {
+  it('returns only users with no household memberships', async () => {
+    const { app, sessionCookie } = await seedAdmin();
+    try {
+      const household = await prisma.household.create({
+        data: { name: 'Casa Libre', appealQuotaCount: 1, appealQuotaPeriod: 'monthly' },
+      });
+      const inHousehold = await prisma.user.create({
+        data: { oidcSubject: 'in-h', name: 'In Household', isAdmin: false },
+      });
+      await prisma.householdMember.create({
+        data: { userId: inHousehold.id, householdId: household.id, approvalMode: 'any' },
+      });
+      const freeUser = await prisma.user.create({
+        data: { oidcSubject: 'free', name: 'Free Floater', isAdmin: false },
+      });
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/admin/users/unassigned',
+        headers: { cookie: sessionCookie },
+      });
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      const ids = body.users.map((u: { id: number }) => u.id);
+      expect(ids).toContain(freeUser.id);
+      expect(ids).not.toContain(inHousehold.id);
+    } finally {
+      await app.close();
+    }
+  });
+});
+
 describe('GET /api/admin/users/:id/detail', () => {
   it('returns 404 for unknown user id', async () => {
     const { app, sessionCookie } = await seedAdmin();
