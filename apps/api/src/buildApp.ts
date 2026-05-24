@@ -13,6 +13,7 @@ import qaRoutes from './routes/qa.js';
 import notificationsRoutes from './routes/notifications.js';
 import householdRoutes from './routes/household.js';
 import feedbackRoutes from './routes/feedback.js';
+import adminRoutes from './routes/admin/index.js';
 import { configurePush } from './lib/push.js';
 
 export async function buildApp(): Promise<FastifyInstance> {
@@ -38,6 +39,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(notificationsRoutes);
   await app.register(householdRoutes);
   await app.register(feedbackRoutes);
+  await app.register(adminRoutes);
 
   // Configure VAPID credentials for web-push (no-op if env vars missing)
   configurePush();
