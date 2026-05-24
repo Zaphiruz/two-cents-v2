@@ -86,6 +86,80 @@ export default async function authRoutes(app: FastifyInstance) {
     reply.redirect('/');
   });
 
+  // ── Dev-only: GET/POST /api/auth/dev-login ───────────────────────────────
+  //
+  // Gated on NODE_ENV !== 'production'. Lets a developer log in as a seeded
+  // user (see prisma/seed.ts) with a hardcoded password — bypasses OIDC so
+  // the app can be exercised end-to-end without Authentik configured locally.
+  //
+  // GET  → serves a tiny HTML form.
+  // POST → body `{ username, password }`; password must be 'admin'; user is
+  //        looked up by `name`; sets session.userId and redirects to /.
+
+  if (process.env.NODE_ENV !== 'production') {
+    const DEV_PASSWORD = 'admin';
+
+    // Fastify ships with JSON + text parsers; form-urlencoded needs one.
+    // Register just for this dev block so it doesn't affect production routes.
+    app.addContentTypeParser(
+      'application/x-www-form-urlencoded',
+      { parseAs: 'string' },
+      (_req, body, done) => done(null, body),
+    );
+
+    app.get('/api/auth/dev-login', async (_req, reply) => {
+      reply
+        .header('Content-Type', 'text/html; charset=utf-8')
+        .send(`<!doctype html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Dev login</title></head>
+<body style="font-family:system-ui;max-width:24rem;margin:4rem auto;padding:1rem">
+  <h1>Dev login</h1>
+  <p style="color:#666;font-size:.9em">Seeded users: <code>admin</code>, <code>Bob</code>, <code>Carol</code>. Password: <code>admin</code>.</p>
+  <form method="POST" action="/api/auth/dev-login" style="display:grid;gap:.5rem">
+    <label>Username <input name="username" value="admin" autofocus required></label>
+    <label>Password <input name="password" type="password" value="admin" required></label>
+    <button type="submit">Log in</button>
+  </form>
+</body></html>`);
+    });
+
+    app.post<{ Body: { username?: string; password?: string } | string }>(
+      '/api/auth/dev-login',
+      async (req, reply) => {
+        // Accept either JSON or form-urlencoded
+        let username: string | undefined;
+        let password: string | undefined;
+        if (typeof req.body === 'string') {
+          const params = new URLSearchParams(req.body);
+          username = params.get('username') ?? undefined;
+          password = params.get('password') ?? undefined;
+        } else if (req.body && typeof req.body === 'object') {
+          username = req.body.username;
+          password = req.body.password;
+        }
+
+        if (!username || password !== DEV_PASSWORD) {
+          reply.code(401).send({ error: 'invalid_credentials' });
+          return;
+        }
+
+        const user = await app.prisma.user.findFirst({
+          where: { name: username },
+          select: { id: true },
+        });
+        if (!user) {
+          reply.code(401).send({ error: 'unknown_user' });
+          return;
+        }
+
+        req.session.userId = user.id;
+        await req.session.save();
+        reply.redirect('/');
+      },
+    );
+  }
+
   // ── GET /api/auth/me ─────────────────────────────────────────────────────
 
   app.get('/api/auth/me', async (req, reply) => {

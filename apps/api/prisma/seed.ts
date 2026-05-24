@@ -1,9 +1,10 @@
 /**
  * Local dev seed. Idempotent: safe to re-run.
  *
- * Creates one household, three users (Alice/Bob/Carol) with mutual approver
+ * Creates one household, three users (admin/Bob/Carol) with mutual approver
  * links, and a handful of requests in various states so the web UI has
- * something to render.
+ * something to render. The "admin" user is also the one wired into the
+ * dev-login route — log in with username `admin` / password `admin`.
  *
  * Usage (from repo root):
  *   DATABASE_URL=postgresql://two_cents_v2:two_cents_v2@localhost:5435/two_cents_v2 \
@@ -55,20 +56,21 @@ async function main() {
     }));
 
   // ── users + members ────────────────────────────────────────────────────────
-  const alice = await upsertUser('dev:alice', 'Alice', true);
+  // The "admin" user is the one wired into dev-login (password also "admin").
+  const admin = await upsertUser('dev:admin', 'admin', true);
   const bob = await upsertUser('dev:bob', 'Bob');
   const carol = await upsertUser('dev:carol', 'Carol');
 
-  const aliceM = await ensureMember(household.id, alice.id);
+  const adminM = await ensureMember(household.id, admin.id);
   const bobM = await ensureMember(household.id, bob.id);
   const carolM = await ensureMember(household.id, carol.id);
 
   // ── approver links (everyone approves everyone) ────────────────────────────
-  await ensureLink(aliceM.id, bobM.id);
-  await ensureLink(aliceM.id, carolM.id);
-  await ensureLink(bobM.id, aliceM.id);
+  await ensureLink(adminM.id, bobM.id);
+  await ensureLink(adminM.id, carolM.id);
+  await ensureLink(bobM.id, adminM.id);
   await ensureLink(bobM.id, carolM.id);
-  await ensureLink(carolM.id, aliceM.id);
+  await ensureLink(carolM.id, adminM.id);
   await ensureLink(carolM.id, bobM.id);
 
   // ── sample requests (skip if any already exist for this household) ─────────
@@ -85,7 +87,7 @@ async function main() {
     await prisma.request.create({
       data: {
         householdId: household.id,
-        buyerId: aliceM.id,
+        buyerId: adminM.id,
         title: 'Replacement coffee grinder',
         description: 'The old one finally died. Burr grinder this time.',
         buyerSeriousness: 'really_want',
@@ -157,18 +159,18 @@ async function main() {
     await prisma.review.create({
       data: {
         requestId: approved.id,
-        approverId: aliceM.id,
+        approverId: adminM.id,
         action: 'approve',
         approverSeriousness: 'need',
         notes: 'Yes, your back will thank you.',
       },
     });
 
-    // denied bundle by Alice (so we can exercise the appeal flow)
+    // denied bundle (so we can exercise the appeal flow)
     const denied = await prisma.request.create({
       data: {
         householdId: household.id,
-        buyerId: aliceM.id,
+        buyerId: adminM.id,
         title: 'New monitor (32" 4K)',
         description: 'For the home office.',
         buyerSeriousness: 'really_want',
@@ -235,8 +237,8 @@ async function main() {
 
   console.log('[seed] done:', {
     household: household.id,
-    users: { alice: alice.id, bob: bob.id, carol: carol.id },
-    members: { alice: aliceM.id, bob: bobM.id, carol: carolM.id },
+    users: { admin: admin.id, bob: bob.id, carol: carol.id },
+    members: { admin: adminM.id, bob: bobM.id, carol: carolM.id },
   });
 }
 
