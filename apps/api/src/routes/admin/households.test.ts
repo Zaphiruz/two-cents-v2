@@ -317,6 +317,57 @@ describe('PUT /api/admin/buyer-approvers', () => {
   });
 });
 
+describe('GET /api/admin/households/:id/detail', () => {
+  it('returns 404 for unknown id', async () => {
+    const { app, sessionCookie } = await seedAdmin();
+    try {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/admin/households/99999/detail',
+        headers: { cookie: sessionCookie },
+      });
+      expect(res.statusCode).toBe(404);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('returns household, members, and buyerApprover pairs', async () => {
+    const { app, sessionCookie } = await seedAdmin();
+    try {
+      const h = await prisma.household.create({
+        data: { name: 'H', appealQuotaCount: 2, appealQuotaPeriod: 'monthly' },
+      });
+      const ua = await prisma.user.create({ data: { oidcSubject: 'hd-a', name: 'A', isAdmin: false } });
+      const ub = await prisma.user.create({ data: { oidcSubject: 'hd-b', name: 'B', isAdmin: false } });
+      const ma = await prisma.householdMember.create({
+        data: { userId: ua.id, householdId: h.id, approvalMode: 'any' },
+      });
+      const mb = await prisma.householdMember.create({
+        data: { userId: ub.id, householdId: h.id, approvalMode: 'all' },
+      });
+      await prisma.buyerApprover.create({ data: { buyerId: ma.id, approverId: mb.id } });
+
+      const res = await app.inject({
+        method: 'GET',
+        url: `/api/admin/households/${h.id}/detail`,
+        headers: { cookie: sessionCookie },
+      });
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.household).toMatchObject({ id: h.id, name: 'H' });
+      expect(body.members).toHaveLength(2);
+      expect(body.members.map((m: { userName: string }) => m.userName)).toEqual(
+        expect.arrayContaining(['A', 'B']),
+      );
+      expect(body.buyerApprovers).toHaveLength(1);
+      expect(body.buyerApprovers[0]).toMatchObject({ buyerId: ma.id, approverId: mb.id });
+    } finally {
+      await app.close();
+    }
+  });
+});
+
 describe('DELETE /api/admin/buyer-approvers/:id', () => {
   it('removes the row', async () => {
     const { app, sessionCookie } = await seedAdmin();

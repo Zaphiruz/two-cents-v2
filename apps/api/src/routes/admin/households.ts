@@ -146,6 +146,58 @@ export default async function adminHouseholdsRoutes(app: FastifyInstance) {
     return { buyerApprover: created };
   });
 
+  app.get<{ Params: { id: string } }>(
+    '/api/admin/households/:id/detail',
+    async (req, reply) => {
+      const id = Number(req.params.id);
+      if (!Number.isFinite(id)) return reply.code(400).send({ error: 'invalid_id' });
+
+      const household = await app.prisma.household.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          name: true,
+          appealQuotaCount: true,
+          appealQuotaPeriod: true,
+          createdAt: true,
+        },
+      });
+      if (!household) return reply.code(404).send({ error: 'not_found' });
+
+      const members = await app.prisma.householdMember.findMany({
+        where: { householdId: id },
+        orderBy: { id: 'asc' },
+        select: {
+          id: true,
+          userId: true,
+          approvalMode: true,
+          joinedAt: true,
+          user: { select: { name: true } },
+        },
+      });
+
+      const memberIds = members.map((m) => m.id);
+      const buyerApprovers = memberIds.length
+        ? await app.prisma.buyerApprover.findMany({
+            where: { buyerId: { in: memberIds } },
+            select: { id: true, buyerId: true, approverId: true },
+          })
+        : [];
+
+      return {
+        household,
+        members: members.map((m) => ({
+          id: m.id,
+          userId: m.userId,
+          userName: m.user.name,
+          approvalMode: m.approvalMode,
+          joinedAt: m.joinedAt,
+        })),
+        buyerApprovers,
+      };
+    },
+  );
+
   app.delete<{ Params: { id: string } }>(
     '/api/admin/buyer-approvers/:id',
     async (req, reply) => {
