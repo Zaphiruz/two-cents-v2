@@ -1,0 +1,65 @@
+# Two Cents v2 production compose for S2.
+#
+# Mirrors the Dinner Club / Velvet Scoop pattern:
+#   - api + worker built from apps/api/Dockerfile, same image, different CMD
+#   - web built from apps/web/Dockerfile (Caddy serves SPA + reverse-proxies /api/*)
+#   - .env on the host contains ONLY VAULT_ADDR + VAULT_TOKEN; everything else
+#     is fetched from Vault at container start by apps/api/entrypoint.mjs
+#   - Cloudflare Origin CA cert mounted into Node containers so Vault HTTPS works
+#
+# Networks:
+#   - shared-db   (external) → postgresql shared-infra container
+#   - shared-redis (external) → redis shared-infra container
+#   - default     (created)   → api ↔ web reverse proxy
+#
+# Port choice during parallel-run with v1: web is exposed on 3007 here so v1
+# can keep using 3005. Edit "3007:8080" → "3005:8080" at cutover (see
+# docs/v1-cutover.md step 9).
+
+x-api-base: &api-base
+  image: two-cents-v2-api:latest
+  build:
+    context: .
+    dockerfile: apps/api/Dockerfile
+  env_file: .env
+  environment:
+    NODE_EXTRA_CA_CERTS: /etc/ssl/extra/cloudflare-ca.crt
+  volumes:
+    - /usr/local/share/ca-certificates/cloudflare-origin-ca.crt:/etc/ssl/extra/cloudflare-ca.crt:ro
+  restart: unless-stopped
+
+services:
+  api:
+    <<: *api-base
+    command: ["node", "entrypoint.mjs", "dist/server.js"]
+    networks:
+      - default
+      - shared-db
+      - shared-redis
+
+  worker:
+    <<: *api-base
+    command: ["node", "entrypoint.mjs", "dist/workers/index.js"]
+    networks:
+      - default
+      - shared-db
+      - shared-redis
+
+  web:
+    image: two-cents-v2-web:latest
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "3007:8080"
+    networks:
+      - default
+
+networks:
+  shared-db:
+    external: true
+  shared-redis:
+    external: true

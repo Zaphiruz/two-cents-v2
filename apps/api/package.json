@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "tsup src/server.ts --format esm --dts",
+    "build": "tsup src/server.ts src/workers/index.ts --format esm --dts",
     "start": "node dist/server.js",
     "test": "vitest run",
     "test:watch": "vitest",

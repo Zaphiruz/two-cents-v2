@@ -1,0 +1,51 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: deploy-two-cents-v2
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    steps:
+      - name: Pull latest code
+        working-directory: /opt/two-cents-v2
+        run: git pull --ff-only
+
+      - name: Refresh secrets
+        working-directory: /opt/two-cents-v2
+        run: bash fetch-secrets.sh
+
+      - name: Build images
+        working-directory: /opt/two-cents-v2
+        run: |
+          set -e
+          for i in 1 2 3; do
+            if docker compose -f compose.prod.yml build api worker web; then
+              exit 0
+            fi
+            echo "build attempt $i failed, retrying..." >&2
+            sleep 10
+          done
+          echo "build failed after 3 attempts" >&2
+          exit 1
+
+      - name: Deploy
+        working-directory: /opt/two-cents-v2
+        run: docker compose -f compose.prod.yml up -d --remove-orphans
+
+      - name: Run migrations
+        working-directory: /opt/two-cents-v2
+        run: |
+          set -e
+          source .env
+          DB_URL=$(curl -sf -H "X-Vault-Token: $VAULT_TOKEN" \
+            "$VAULT_ADDR/v1/secret/data/two-cents-v2" \
+            | python3 -c "import sys,json; print(json.load(sys.stdin)['data']['data']['DATABASE_URL'])")
+          docker exec -e DATABASE_URL="$DB_URL" two-cents-v2-api-1 \
+            node_modules/.bin/prisma migrate deploy --schema prisma/schema.prisma

@@ -14,11 +14,14 @@ RUN pnpm --filter @two-cents/api build
 # ---- runtime ----
 FROM node:22-alpine AS app
 WORKDIR /app
+RUN apk add --no-cache openssl
 RUN corepack enable
 COPY --from=build /repo/apps/api/dist ./dist
 COPY --from=build /repo/apps/api/package.json ./
 COPY --from=build /repo/apps/api/node_modules ./node_modules
 COPY --from=build /repo/packages/shared ./packages/shared
 COPY --from=build /repo/apps/api/prisma ./prisma
+COPY apps/api/entrypoint.mjs ./entrypoint.mjs
 EXPOSE 4000
-CMD ["node", "dist/server.js"]
+# Default to api; worker overrides CMD in compose.
+CMD ["node", "entrypoint.mjs", "dist/server.js"]

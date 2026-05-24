@@ -1,6 +1,15 @@
 :8080 {
-    root * /srv
-    encode gzip
-    try_files {path} /index.html
-    file_server
+    encode gzip zstd
+
+    # Proxy backend traffic to the api container on the compose network.
+    handle /api/* {
+        reverse_proxy api:4000
+    }
+
+    # SPA fallback for everything else.
+    handle {
+        root * /srv
+        try_files {path} /index.html
+        file_server
+    }
 }
