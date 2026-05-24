@@ -185,4 +185,16 @@ export default async function adminUsersRoutes(app: FastifyInstance) {
       return result;
     },
   );
+
+  app.delete<{ Params: { id: string } }>(
+    '/api/admin/users/:id/push-subscriptions',
+    async (req, reply) => {
+      const userId = Number(req.params.id);
+      if (!Number.isFinite(userId)) return reply.code(400).send({ error: 'invalid_id' });
+      const user = await app.prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+      if (!user) return reply.code(404).send({ error: 'not_found' });
+      const { count } = await app.prisma.pushSubscription.deleteMany({ where: { userId } });
+      return { deleted: count };
+    },
+  );
 }

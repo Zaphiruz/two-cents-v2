@@ -242,3 +242,46 @@ describe('POST /api/admin/users/:id/test-push', () => {
     }
   });
 });
+
+describe('DELETE /api/admin/users/:id/push-subscriptions', () => {
+  it('returns 404 for unknown user', async () => {
+    const { app, sessionCookie } = await seedAdmin();
+    try {
+      const res = await app.inject({
+        method: 'DELETE',
+        url: '/api/admin/users/99999/push-subscriptions',
+        headers: { cookie: sessionCookie },
+      });
+      expect(res.statusCode).toBe(404);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('deletes all push subscriptions for the user and returns count', async () => {
+    const { app, sessionCookie } = await seedAdmin();
+    try {
+      const user = await prisma.user.create({
+        data: { oidcSubject: 'd', name: 'Del', isAdmin: false },
+      });
+      await prisma.pushSubscription.createMany({
+        data: [
+          { userId: user.id, endpoint: 'https://x/1', p256dh: 'p', auth: 'a' },
+          { userId: user.id, endpoint: 'https://x/2', p256dh: 'p', auth: 'a' },
+        ],
+      });
+
+      const res = await app.inject({
+        method: 'DELETE',
+        url: `/api/admin/users/${user.id}/push-subscriptions`,
+        headers: { cookie: sessionCookie },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ deleted: 2 });
+      const remaining = await prisma.pushSubscription.count({ where: { userId: user.id } });
+      expect(remaining).toBe(0);
+    } finally {
+      await app.close();
+    }
+  });
+});
