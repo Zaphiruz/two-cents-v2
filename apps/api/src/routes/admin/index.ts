@@ -3,6 +3,7 @@ import adminUsersRoutes from './users.js';
 import adminHouseholdsRoutes from './households.js';
 import adminAppealsRoutes from './appeals.js';
 import adminFeedbackRoutes from './feedback.js';
+import adminSearchRoutes from './search.js';
 
 export interface AdminUser {
   id: number;
@@ -40,4 +41,5 @@ export default async function adminRoutes(app: FastifyInstance) {
   await app.register(adminHouseholdsRoutes);
   await app.register(adminAppealsRoutes);
   await app.register(adminFeedbackRoutes);
+  await app.register(adminSearchRoutes);
 }
