@@ -7,6 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/components/ui/use-toast';
+import { formatRelative } from '@/lib/format';
 
 export interface CommentItem {
   id: number;
@@ -18,31 +19,6 @@ export interface CommentItem {
 interface CommentsProps {
   requestId: number;
   comments: CommentItem[];
-}
-
-const RELATIVE_UNITS: Array<{ unit: Intl.RelativeTimeFormatUnit; seconds: number }> = [
-  { unit: 'year', seconds: 60 * 60 * 24 * 365 },
-  { unit: 'month', seconds: 60 * 60 * 24 * 30 },
-  { unit: 'week', seconds: 60 * 60 * 24 * 7 },
-  { unit: 'day', seconds: 60 * 60 * 24 },
-  { unit: 'hour', seconds: 60 * 60 },
-  { unit: 'minute', seconds: 60 },
-  { unit: 'second', seconds: 1 },
-];
-
-function formatRelative(iso: string, now: Date = new Date()): string {
-  const then = new Date(iso).getTime();
-  if (Number.isNaN(then)) return iso;
-  const diffSeconds = Math.round((then - now.getTime()) / 1000);
-  const abs = Math.abs(diffSeconds);
-  const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
-  for (const { unit, seconds } of RELATIVE_UNITS) {
-    if (abs >= seconds || unit === 'second') {
-      const value = Math.round(diffSeconds / seconds);
-      return rtf.format(value, unit);
-    }
-  }
-  return rtf.format(0, 'second');
 }
 
 interface RequestCacheShape {

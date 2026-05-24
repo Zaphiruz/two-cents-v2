@@ -1,7 +1,6 @@
 import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -9,8 +8,14 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import {
+  StatusBadge,
+  STATUS_LABEL,
+  type RequestStatus,
+} from '@/components/ui/StatusBadge';
 import { useToast } from '@/components/ui/use-toast';
 import { request } from '@/lib/api';
+import { formatCurrency, formatRelative } from '@/lib/format';
 
 interface QueueItem {
   id: number;
@@ -18,16 +23,6 @@ interface QueueItem {
   priceCents: number;
   position: number;
 }
-
-type RequestStatus =
-  | 'pending'
-  | 'delayed'
-  | 'awaiting_reconfirm'
-  | 'approved'
-  | 'denied'
-  | 'cancelled'
-  | 'archived'
-  | 'purchased';
 
 interface QueueRequest {
   id: number;
@@ -54,72 +49,8 @@ const STATUS_ORDER: RequestStatus[] = [
   'denied',
 ];
 
-const STATUS_LABEL: Record<RequestStatus, string> = {
-  pending: 'Pending',
-  delayed: 'Delayed',
-  awaiting_reconfirm: 'Awaiting reconfirm',
-  approved: 'Approved',
-  denied: 'Denied',
-  cancelled: 'Cancelled',
-  archived: 'Archived',
-  purchased: 'Purchased',
-};
-
 function sumPriceCents(items: QueueItem[]): number {
   return items.reduce((acc, it) => acc + (it.priceCents ?? 0), 0);
-}
-
-function formatCurrency(cents: number, currency: string): string {
-  try {
-    return new Intl.NumberFormat(undefined, {
-      style: 'currency',
-      currency,
-    }).format(cents / 100);
-  } catch {
-    return `${(cents / 100).toFixed(2)} ${currency}`;
-  }
-}
-
-const REL_UNITS: Array<{ unit: Intl.RelativeTimeFormatUnit; seconds: number }> = [
-  { unit: 'year', seconds: 60 * 60 * 24 * 365 },
-  { unit: 'month', seconds: 60 * 60 * 24 * 30 },
-  { unit: 'week', seconds: 60 * 60 * 24 * 7 },
-  { unit: 'day', seconds: 60 * 60 * 24 },
-  { unit: 'hour', seconds: 60 * 60 },
-  { unit: 'minute', seconds: 60 },
-  { unit: 'second', seconds: 1 },
-];
-
-function formatRelative(iso: string, now: Date = new Date()): string {
-  const then = new Date(iso).getTime();
-  if (Number.isNaN(then)) return '';
-  const deltaSec = Math.round((then - now.getTime()) / 1000);
-  const abs = Math.abs(deltaSec);
-  const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
-  for (const { unit, seconds } of REL_UNITS) {
-    if (abs >= seconds || unit === 'second') {
-      const value = Math.round(deltaSec / seconds);
-      return rtf.format(value, unit);
-    }
-  }
-  return '';
-}
-
-function statusBadge(status: RequestStatus) {
-  const label = STATUS_LABEL[status] ?? status;
-  if (status === 'pending') {
-    return <Badge variant="default">{label}</Badge>;
-  }
-  if (status === 'delayed' || status === 'awaiting_reconfirm') {
-    return <Badge variant="secondary">{label}</Badge>;
-  }
-  if (status === 'approved') {
-    return <Badge className="bg-green-600 text-white">{label}</Badge>;
-  }
-  if (status === 'denied') {
-    return <Badge variant="destructive">{label}</Badge>;
-  }
-  return <Badge variant="outline">{label}</Badge>;
 }
 
 function groupByStatus(rows: QueueRequest[]): Map<RequestStatus, QueueRequest[]> {
@@ -181,7 +112,7 @@ function MyActiveRow({ row }: { row: QueueRequest }) {
           >
             {row.title}
           </Link>
-          {statusBadge(row.status)}
+          <StatusBadge status={row.status} />
         </div>
         <div className="mt-1 text-xs text-muted-foreground">
           {row.items.length} item{row.items.length === 1 ? '' : 's'}

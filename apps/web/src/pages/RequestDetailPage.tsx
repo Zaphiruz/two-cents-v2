@@ -1,24 +1,18 @@
 import { useEffect } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
+import {
+  StatusBadge,
+  type RequestStatus,
+} from '@/components/ui/StatusBadge';
 import { useToast } from '@/components/ui/use-toast';
 import { ApiError, request } from '@/lib/api';
 import { useUser } from '@/lib/auth';
+import { formatCurrency, formatRelative } from '@/lib/format';
 import { ApproverAction } from '@/components/request/ApproverAction';
 import { Comments, type CommentItem } from '@/components/request/Comments';
-
-type RequestStatus =
-  | 'pending'
-  | 'delayed'
-  | 'awaiting_reconfirm'
-  | 'approved'
-  | 'denied'
-  | 'cancelled'
-  | 'archived'
-  | 'purchased';
 
 interface ItemRow {
   id: number;
@@ -63,17 +57,6 @@ export interface DetailResponse {
   appealsRemaining: number;
 }
 
-const STATUS_LABEL: Record<RequestStatus, string> = {
-  pending: 'Pending',
-  delayed: 'Delayed',
-  awaiting_reconfirm: 'Awaiting reconfirm',
-  approved: 'Approved',
-  denied: 'Denied',
-  cancelled: 'Cancelled',
-  archived: 'Archived',
-  purchased: 'Purchased',
-};
-
 const ACTION_LABEL: Record<ReviewRow['action'], string> = {
   approve: 'Approved',
   delay: 'Delayed',
@@ -85,59 +68,6 @@ const SERIOUSNESS_LABEL: Record<ReviewRow['approverSeriousness'], string> = {
   really_want: 'Really want',
   nice_to_have: 'Nice to have',
 };
-
-const REL_UNITS: Array<{ unit: Intl.RelativeTimeFormatUnit; seconds: number }> = [
-  { unit: 'year', seconds: 60 * 60 * 24 * 365 },
-  { unit: 'month', seconds: 60 * 60 * 24 * 30 },
-  { unit: 'week', seconds: 60 * 60 * 24 * 7 },
-  { unit: 'day', seconds: 60 * 60 * 24 },
-  { unit: 'hour', seconds: 60 * 60 },
-  { unit: 'minute', seconds: 60 },
-  { unit: 'second', seconds: 1 },
-];
-
-function formatRelative(iso: string, now: Date = new Date()): string {
-  const then = new Date(iso).getTime();
-  if (Number.isNaN(then)) return '';
-  const deltaSec = Math.round((then - now.getTime()) / 1000);
-  const abs = Math.abs(deltaSec);
-  const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
-  for (const { unit, seconds } of REL_UNITS) {
-    if (abs >= seconds || unit === 'second') {
-      const value = Math.round(deltaSec / seconds);
-      return rtf.format(value, unit);
-    }
-  }
-  return '';
-}
-
-function formatCurrency(cents: number, currency: string): string {
-  try {
-    return new Intl.NumberFormat(undefined, {
-      style: 'currency',
-      currency,
-    }).format(cents / 100);
-  } catch {
-    return `${(cents / 100).toFixed(2)} ${currency}`;
-  }
-}
-
-function statusBadge(status: RequestStatus) {
-  const label = STATUS_LABEL[status] ?? status;
-  if (status === 'pending') {
-    return <Badge variant="default">{label}</Badge>;
-  }
-  if (status === 'delayed' || status === 'awaiting_reconfirm') {
-    return <Badge variant="secondary">{label}</Badge>;
-  }
-  if (status === 'approved') {
-    return <Badge className="bg-green-600 text-white">{label}</Badge>;
-  }
-  if (status === 'denied') {
-    return <Badge variant="destructive">{label}</Badge>;
-  }
-  return <Badge variant="outline">{label}</Badge>;
-}
 
 export default function RequestDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -351,7 +281,7 @@ export default function RequestDetailPage() {
       <section className="space-y-3">
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-2xl font-semibold">{req.title}</h1>
-          {statusBadge(req.status)}
+          <StatusBadge status={req.status} />
         </div>
         <div className="text-sm text-muted-foreground">
           <span className="font-medium">{req.buyer.user.name}</span>
