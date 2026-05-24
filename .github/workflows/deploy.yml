@@ -1,11 +1,8 @@
 name: Deploy
 
-# Manual-trigger only until the self-hosted runner + deploy key are set up on S2.
-# Once docs/v1-cutover.md steps 1-5 are done, flip this back to:
-#   on:
-#     push:
-#       branches: [main]
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 concurrency:
