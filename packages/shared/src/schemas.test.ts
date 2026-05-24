@@ -514,3 +514,66 @@ describe('FeedbackInputSchema', () => {
     ).toThrow();
   });
 });
+
+// ── Admin schemas ─────────────────────────────────────────────────────────────
+
+import {
+  AdminListUsersQuerySchema,
+  AdminUpdateHouseholdSchema,
+  AdminAddHouseholdMemberSchema,
+  AdminUpdateHouseholdMemberSchema,
+  AdminUpsertBuyerApproverSchema,
+  AdminListAppealsQuerySchema,
+  AdminResolveAppealSchema,
+} from './schemas.js';
+
+describe('admin schemas', () => {
+  it('AdminListUsersQuerySchema accepts empty query', () => {
+    expect(AdminListUsersQuerySchema.parse({})).toEqual({});
+  });
+
+  it('AdminListUsersQuerySchema coerces isAdmin string to boolean', () => {
+    expect(AdminListUsersQuerySchema.parse({ isAdmin: 'true' })).toEqual({ isAdmin: true });
+    expect(AdminListUsersQuerySchema.parse({ isAdmin: 'false' })).toEqual({ isAdmin: false });
+  });
+
+  it('AdminUpdateHouseholdSchema accepts partial payload', () => {
+    expect(AdminUpdateHouseholdSchema.parse({ name: 'Smith' })).toEqual({ name: 'Smith' });
+    expect(AdminUpdateHouseholdSchema.parse({ appealQuotaCount: 5 })).toEqual({ appealQuotaCount: 5 });
+  });
+
+  it('AdminUpdateHouseholdSchema rejects empty object', () => {
+    expect(() => AdminUpdateHouseholdSchema.parse({})).toThrow();
+  });
+
+  it('AdminAddHouseholdMemberSchema requires userId and approvalMode', () => {
+    expect(AdminAddHouseholdMemberSchema.parse({ userId: 1, approvalMode: 'any' }))
+      .toEqual({ userId: 1, approvalMode: 'any' });
+    expect(() => AdminAddHouseholdMemberSchema.parse({ userId: 1 })).toThrow();
+  });
+
+  it('AdminUpdateHouseholdMemberSchema requires approvalMode', () => {
+    expect(AdminUpdateHouseholdMemberSchema.parse({ approvalMode: 'all' }))
+      .toEqual({ approvalMode: 'all' });
+    expect(() => AdminUpdateHouseholdMemberSchema.parse({})).toThrow();
+  });
+
+  it('AdminUpsertBuyerApproverSchema requires both ids', () => {
+    expect(AdminUpsertBuyerApproverSchema.parse({ buyerId: 1, approverId: 2 }))
+      .toEqual({ buyerId: 1, approverId: 2 });
+  });
+
+  it('AdminUpsertBuyerApproverSchema rejects buyer === approver', () => {
+    expect(() => AdminUpsertBuyerApproverSchema.parse({ buyerId: 1, approverId: 1 })).toThrow();
+  });
+
+  it('AdminListAppealsQuerySchema accepts status and householdId', () => {
+    expect(AdminListAppealsQuerySchema.parse({ status: 'pending', householdId: 3 }))
+      .toEqual({ status: 'pending', householdId: 3 });
+  });
+
+  it('AdminResolveAppealSchema accepts overturn or uphold', () => {
+    expect(AdminResolveAppealSchema.parse({ decision: 'overturn' })).toEqual({ decision: 'overturn' });
+    expect(() => AdminResolveAppealSchema.parse({ decision: 'unsure' })).toThrow();
+  });
+});

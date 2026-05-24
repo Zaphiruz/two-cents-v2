@@ -202,3 +202,69 @@ export const FeedbackInputSchema = z.object({
   category: z.string().max(50).optional(),
 });
 export type FeedbackInput = z.infer<typeof FeedbackInputSchema>;
+
+// ─── Admin schemas ─────────────────────────────────────────────────────────
+
+const stringBool = z
+  .union([z.boolean(), z.enum(['true', 'false'])])
+  .transform((v) => (typeof v === 'boolean' ? v : v === 'true'));
+
+const intLike = z.union([z.number().int().positive(), z.string().regex(/^\d+$/).transform(Number)]);
+
+export const AdminListUsersQuerySchema = z.object({
+  q: z.string().min(1).optional(),
+  isAdmin: stringBool.optional(),
+  cursor: intLike.optional(),
+  limit: intLike.default(50).optional(),
+});
+export type AdminListUsersQuery = z.infer<typeof AdminListUsersQuerySchema>;
+
+export const AdminUpdateHouseholdSchema = z
+  .object({
+    name: z.string().min(1).max(200).optional(),
+    appealQuotaCount: z.number().int().min(0).max(1000).optional(),
+    appealQuotaPeriod: z.enum(['monthly', 'quarterly']).optional(),
+  })
+  .refine(
+    (v) =>
+      v.name !== undefined ||
+      v.appealQuotaCount !== undefined ||
+      v.appealQuotaPeriod !== undefined,
+    { message: 'at least one field required' },
+  );
+export type AdminUpdateHousehold = z.infer<typeof AdminUpdateHouseholdSchema>;
+
+export const AdminAddHouseholdMemberSchema = z.object({
+  userId: z.number().int().positive(),
+  approvalMode: z.enum(['any', 'all']),
+});
+export type AdminAddHouseholdMember = z.infer<typeof AdminAddHouseholdMemberSchema>;
+
+export const AdminUpdateHouseholdMemberSchema = z.object({
+  approvalMode: z.enum(['any', 'all']),
+});
+export type AdminUpdateHouseholdMember = z.infer<typeof AdminUpdateHouseholdMemberSchema>;
+
+export const AdminUpsertBuyerApproverSchema = z
+  .object({
+    buyerId: z.number().int().positive(),
+    approverId: z.number().int().positive(),
+  })
+  .refine((v) => v.buyerId !== v.approverId, {
+    message: 'buyer and approver must differ',
+  });
+export type AdminUpsertBuyerApprover = z.infer<typeof AdminUpsertBuyerApproverSchema>;
+
+export const AdminListAppealsQuerySchema = z.object({
+  status: z.enum(['pending', 'upheld', 'overturned']).optional(),
+  householdId: intLike.optional(),
+  periodKey: z.string().min(1).max(50).optional(),
+  cursor: intLike.optional(),
+  limit: intLike.default(50).optional(),
+});
+export type AdminListAppealsQuery = z.infer<typeof AdminListAppealsQuerySchema>;
+
+export const AdminResolveAppealSchema = z.object({
+  decision: z.enum(['overturn', 'uphold']),
+});
+export type AdminResolveAppeal = z.infer<typeof AdminResolveAppealSchema>;
