@@ -20,6 +20,8 @@ import AdminLayout from './pages/admin/AdminLayout';
 import PeoplePage from './pages/admin/PeoplePage';
 import HouseholdsPage from './pages/admin/HouseholdsPage';
 import AdminAppealsPage from './pages/admin/AdminAppealsPage';
+import AdminFeedbackPage from './pages/admin/AdminFeedbackPage';
+import AdminSearchPage from './pages/admin/AdminSearchPage';
 
 export default function App() {
   return (
@@ -50,6 +52,8 @@ export default function App() {
                 <Route path="people" element={<PeoplePage />} />
                 <Route path="households" element={<HouseholdsPage />} />
                 <Route path="appeals" element={<AdminAppealsPage />} />
+                <Route path="feedback" element={<AdminFeedbackPage />} />
+                <Route path="search" element={<AdminSearchPage />} />
               </Route>
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>

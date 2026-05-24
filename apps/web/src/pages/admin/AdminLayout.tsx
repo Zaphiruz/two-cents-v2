@@ -4,7 +4,8 @@ const sections = [
   { to: 'people', label: 'People' },
   { to: 'households', label: 'Households' },
   { to: 'appeals', label: 'Appeals' },
-  // Feedback + Search added in PR 2
+  { to: 'feedback', label: 'Feedback' },
+  { to: 'search', label: 'Audit Search' },
 ];
 
 export default function AdminLayout() {
