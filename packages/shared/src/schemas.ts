@@ -215,7 +215,7 @@ export const AdminListUsersQuerySchema = z.object({
   q: z.string().min(1).optional(),
   isAdmin: stringBool.optional(),
   cursor: intLike.optional(),
-  limit: intLike.default(50).optional(),
+  limit: intLike.optional().default(50),
 });
 export type AdminListUsersQuery = z.infer<typeof AdminListUsersQuerySchema>;
 
@@ -260,7 +260,7 @@ export const AdminListAppealsQuerySchema = z.object({
   householdId: intLike.optional(),
   periodKey: z.string().min(1).max(50).optional(),
   cursor: intLike.optional(),
-  limit: intLike.default(50).optional(),
+  limit: intLike.optional().default(50),
 });
 export type AdminListAppealsQuery = z.infer<typeof AdminListAppealsQuerySchema>;
 

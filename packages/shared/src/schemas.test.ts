@@ -13,6 +13,13 @@ import {
   UpdateNotificationPreferencesInputSchema,
   HouseholdInviteInputSchema,
   FeedbackInputSchema,
+  AdminListUsersQuerySchema,
+  AdminUpdateHouseholdSchema,
+  AdminAddHouseholdMemberSchema,
+  AdminUpdateHouseholdMemberSchema,
+  AdminUpsertBuyerApproverSchema,
+  AdminListAppealsQuerySchema,
+  AdminResolveAppealSchema,
 } from './schemas.js';
 
 // ── RequestItemInput ──────────────────────────────────────────────────────────
@@ -517,24 +524,14 @@ describe('FeedbackInputSchema', () => {
 
 // ── Admin schemas ─────────────────────────────────────────────────────────────
 
-import {
-  AdminListUsersQuerySchema,
-  AdminUpdateHouseholdSchema,
-  AdminAddHouseholdMemberSchema,
-  AdminUpdateHouseholdMemberSchema,
-  AdminUpsertBuyerApproverSchema,
-  AdminListAppealsQuerySchema,
-  AdminResolveAppealSchema,
-} from './schemas.js';
-
 describe('admin schemas', () => {
   it('AdminListUsersQuerySchema accepts empty query', () => {
-    expect(AdminListUsersQuerySchema.parse({})).toEqual({});
+    expect(AdminListUsersQuerySchema.parse({})).toEqual({ limit: 50 });
   });
 
   it('AdminListUsersQuerySchema coerces isAdmin string to boolean', () => {
-    expect(AdminListUsersQuerySchema.parse({ isAdmin: 'true' })).toEqual({ isAdmin: true });
-    expect(AdminListUsersQuerySchema.parse({ isAdmin: 'false' })).toEqual({ isAdmin: false });
+    expect(AdminListUsersQuerySchema.parse({ isAdmin: 'true' })).toEqual({ isAdmin: true, limit: 50 });
+    expect(AdminListUsersQuerySchema.parse({ isAdmin: 'false' })).toEqual({ isAdmin: false, limit: 50 });
   });
 
   it('AdminUpdateHouseholdSchema accepts partial payload', () => {
@@ -569,7 +566,7 @@ describe('admin schemas', () => {
 
   it('AdminListAppealsQuerySchema accepts status and householdId', () => {
     expect(AdminListAppealsQuerySchema.parse({ status: 'pending', householdId: 3 }))
-      .toEqual({ status: 'pending', householdId: 3 });
+      .toEqual({ status: 'pending', householdId: 3, limit: 50 });
   });
 
   it('AdminResolveAppealSchema accepts overturn or uphold', () => {
