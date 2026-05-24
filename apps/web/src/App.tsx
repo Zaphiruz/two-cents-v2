@@ -14,6 +14,7 @@ import NotificationSettingsPage from '@/pages/NotificationSettingsPage';
 import HouseholdPage from '@/pages/HouseholdPage';
 import FeedbackPage from '@/pages/FeedbackPage';
 import NewFeedbackPage from '@/pages/NewFeedbackPage';
+import ShareTargetPage from '@/pages/ShareTargetPage';
 
 export default function App() {
   return (
@@ -38,6 +39,7 @@ export default function App() {
               <Route path="settings/notifications" element={<NotificationSettingsPage />} />
               <Route path="feedback/new" element={<NewFeedbackPage />} />
               <Route path="feedback" element={<FeedbackPage />} />
+              <Route path="share-target" element={<ShareTargetPage />} />
               <Route path="admin" element={<div className="p-6">Admin (coming soon)</div>} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
