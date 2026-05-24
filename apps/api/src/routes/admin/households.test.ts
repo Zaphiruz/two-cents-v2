@@ -63,3 +63,61 @@ describe('GET /api/admin/households', () => {
     }
   });
 });
+
+describe('PATCH /api/admin/households/:id', () => {
+  it('updates name, quota count, and period', async () => {
+    const { app, sessionCookie } = await seedAdmin();
+    try {
+      const h = await prisma.household.create({
+        data: { name: 'Old', appealQuotaCount: 1, appealQuotaPeriod: 'monthly' },
+      });
+      const res = await app.inject({
+        method: 'PATCH',
+        url: `/api/admin/households/${h.id}`,
+        headers: { cookie: sessionCookie },
+        payload: { name: 'New', appealQuotaCount: 5, appealQuotaPeriod: 'quarterly' },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().household).toMatchObject({
+        name: 'New',
+        appealQuotaCount: 5,
+        appealQuotaPeriod: 'quarterly',
+      });
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('returns 400 when no fields supplied', async () => {
+    const { app, sessionCookie } = await seedAdmin();
+    try {
+      const h = await prisma.household.create({
+        data: { name: 'X', appealQuotaCount: 1, appealQuotaPeriod: 'monthly' },
+      });
+      const res = await app.inject({
+        method: 'PATCH',
+        url: `/api/admin/households/${h.id}`,
+        headers: { cookie: sessionCookie },
+        payload: {},
+      });
+      expect(res.statusCode).toBe(400);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('returns 404 for unknown id', async () => {
+    const { app, sessionCookie } = await seedAdmin();
+    try {
+      const res = await app.inject({
+        method: 'PATCH',
+        url: '/api/admin/households/99999',
+        headers: { cookie: sessionCookie },
+        payload: { name: 'X' },
+      });
+      expect(res.statusCode).toBe(404);
+    } finally {
+      await app.close();
+    }
+  });
+});
