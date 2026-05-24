@@ -20,6 +20,8 @@ import {
   AdminUpsertBuyerApproverSchema,
   AdminListAppealsQuerySchema,
   AdminResolveAppealSchema,
+  AdminListFeedbackQuerySchema,
+  AdminSearchQuerySchema,
 } from './schemas.js';
 
 // ── RequestItemInput ──────────────────────────────────────────────────────────
@@ -572,5 +574,30 @@ describe('admin schemas', () => {
   it('AdminResolveAppealSchema accepts overturn or uphold', () => {
     expect(AdminResolveAppealSchema.parse({ decision: 'overturn' })).toEqual({ decision: 'overturn' });
     expect(() => AdminResolveAppealSchema.parse({ decision: 'unsure' })).toThrow();
+  });
+
+  it('AdminListFeedbackQuerySchema accepts empty and applies default limit', () => {
+    expect(AdminListFeedbackQuerySchema.parse({})).toEqual({ limit: 50 });
+  });
+
+  it('AdminListFeedbackQuerySchema accepts category and hasGhIssue coerced from string', () => {
+    expect(AdminListFeedbackQuerySchema.parse({ category: 'bug', hasGhIssue: 'true' }))
+      .toEqual({ category: 'bug', hasGhIssue: true, limit: 50 });
+  });
+
+  it('AdminSearchQuerySchema requires q', () => {
+    expect(() => AdminSearchQuerySchema.parse({})).toThrow();
+    expect(() => AdminSearchQuerySchema.parse({ q: '' })).toThrow();
+  });
+
+  it('AdminSearchQuerySchema accepts q + optional type', () => {
+    expect(AdminSearchQuerySchema.parse({ q: 'gladis' }))
+      .toEqual({ q: 'gladis' });
+    expect(AdminSearchQuerySchema.parse({ q: 'gladis', type: 'request' }))
+      .toEqual({ q: 'gladis', type: 'request' });
+  });
+
+  it('AdminSearchQuerySchema rejects unknown type', () => {
+    expect(() => AdminSearchQuerySchema.parse({ q: 'x', type: 'user' })).toThrow();
   });
 });

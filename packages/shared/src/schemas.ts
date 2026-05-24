@@ -268,3 +268,19 @@ export const AdminResolveAppealSchema = z.object({
   decision: z.enum(['overturn', 'uphold']),
 });
 export type AdminResolveAppeal = z.infer<typeof AdminResolveAppealSchema>;
+
+export const AdminListFeedbackQuerySchema = z.object({
+  category: z.string().min(1).optional(),
+  hasGhIssue: stringBool.optional(),
+  cursor: intLike.optional(),
+  limit: intLike.optional().default(50),
+});
+export type AdminListFeedbackQuery = z.infer<typeof AdminListFeedbackQuerySchema>;
+
+export const AdminSearchQuerySchema = z.object({
+  q: z.string().min(1).max(200),
+  type: z
+    .enum(['request', 'comment', 'notificationLog', 'pushSubscription', 'consumedJwtJti'])
+    .optional(),
+});
+export type AdminSearchQuery = z.infer<typeof AdminSearchQuerySchema>;
