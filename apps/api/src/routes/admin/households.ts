@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { AdminUpdateHouseholdSchema } from '@two-cents/shared';
+import { AdminAddHouseholdMemberSchema, AdminUpdateHouseholdSchema } from '@two-cents/shared';
 
 export default async function adminHouseholdsRoutes(app: FastifyInstance) {
   app.get('/api/admin/households', async () => {
@@ -49,4 +49,41 @@ export default async function adminHouseholdsRoutes(app: FastifyInstance) {
     });
     return { household };
   });
+
+  app.post<{ Params: { id: string } }>(
+    '/api/admin/households/:id/members',
+    async (req, reply) => {
+      const householdId = Number(req.params.id);
+      if (!Number.isFinite(householdId)) return reply.code(400).send({ error: 'invalid_id' });
+      const body = AdminAddHouseholdMemberSchema.parse(req.body);
+
+      const household = await app.prisma.household.findUnique({
+        where: { id: householdId },
+        select: { id: true },
+      });
+      if (!household) return reply.code(404).send({ error: 'not_found' });
+
+      const existing = await app.prisma.householdMember.findFirst({
+        where: { userId: body.userId },
+        select: { id: true },
+      });
+      if (existing) return reply.code(409).send({ error: 'already_member' });
+
+      const member = await app.prisma.householdMember.create({
+        data: {
+          householdId,
+          userId: body.userId,
+          approvalMode: body.approvalMode,
+        },
+        select: {
+          id: true,
+          userId: true,
+          householdId: true,
+          approvalMode: true,
+          joinedAt: true,
+        },
+      });
+      return reply.code(201).send({ member });
+    },
+  );
 }
