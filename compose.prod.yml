@@ -12,9 +12,8 @@
 #   - shared-redis (external) → redis shared-infra container
 #   - default     (created)   → api ↔ web reverse proxy
 #
-# Port choice during parallel-run with v1: web is exposed on 3007 here so v1
-# can keep using 3005. Edit "3007:8080" → "3005:8080" at cutover (see
-# docs/v1-cutover.md step 9).
+# Web is exposed on :3005, the port nginx (LC2) already proxies to.
+# (Parallel-run with v1 used :3007; see docs/v1-cutover.md step 9 for history.)
 
 x-api-base: &api-base
   image: two-cents-v2-api:latest
@@ -54,7 +53,7 @@ services:
     depends_on:
       - api
     ports:
-      - "3007:8080"
+      - "3005:8080"
     networks:
       - default
 
