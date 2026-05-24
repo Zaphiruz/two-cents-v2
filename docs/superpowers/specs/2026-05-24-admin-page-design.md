@@ -146,7 +146,9 @@ Single search box + type filter (Request, Comment, NotificationLog, PushSubscrip
 Result row varies by type but always shows: type badge, primary identifier (title for requests, snippet for comments, event_key for logs, endpoint for subs, jti for jtis), associated user + household, created_at. Click → detail drawer with the full row JSON.
 
 **Endpoint:**
-- `GET /api/admin/search?q=&type=` → returns `{ results: AuditMatch[], totalByType: Record<type, count> }`
+- `GET /api/admin/search?q=&type=` → returns `{ results: AuditMatch[] }`
+
+(Earlier drafts of this spec also returned `totalByType: Record<type, count>`. Dropped during PR 2 implementation: accurate totals would require a second per-type `count` query — doubling DB roundtrips, contradicting the Risks section's performance concern — and the UI doesn't need them. Add back via a `?totals=true` opt-in if a use case emerges.)
 
 `q` matches: request title/notes, comment text, log event_key, sub endpoint, jti. Case-insensitive. Limit 50 results per call (no pagination yet — if needed, add cursor later).
 
