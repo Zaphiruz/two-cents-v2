@@ -1,5 +1,9 @@
 import type { FastifyInstance } from 'fastify';
-import { AdminAddHouseholdMemberSchema, AdminUpdateHouseholdSchema } from '@two-cents/shared';
+import {
+  AdminAddHouseholdMemberSchema,
+  AdminUpdateHouseholdMemberSchema,
+  AdminUpdateHouseholdSchema,
+} from '@two-cents/shared';
 
 export default async function adminHouseholdsRoutes(app: FastifyInstance) {
   app.get('/api/admin/households', async () => {
@@ -84,6 +88,46 @@ export default async function adminHouseholdsRoutes(app: FastifyInstance) {
         },
       });
       return reply.code(201).send({ member });
+    },
+  );
+
+  app.patch<{ Params: { id: string } }>(
+    '/api/admin/household-members/:id',
+    async (req, reply) => {
+      const memberId = Number(req.params.id);
+      if (!Number.isFinite(memberId)) return reply.code(400).send({ error: 'invalid_id' });
+      const body = AdminUpdateHouseholdMemberSchema.parse(req.body);
+      const existing = await app.prisma.householdMember.findUnique({
+        where: { id: memberId },
+        select: { id: true },
+      });
+      if (!existing) return reply.code(404).send({ error: 'not_found' });
+      const member = await app.prisma.householdMember.update({
+        where: { id: memberId },
+        data: { approvalMode: body.approvalMode },
+        select: { id: true, userId: true, householdId: true, approvalMode: true, joinedAt: true },
+      });
+      return { member };
+    },
+  );
+
+  app.delete<{ Params: { id: string } }>(
+    '/api/admin/household-members/:id',
+    async (req, reply) => {
+      const memberId = Number(req.params.id);
+      if (!Number.isFinite(memberId)) return reply.code(400).send({ error: 'invalid_id' });
+      const existing = await app.prisma.householdMember.findUnique({
+        where: { id: memberId },
+        select: { id: true },
+      });
+      if (!existing) return reply.code(404).send({ error: 'not_found' });
+      await app.prisma.$transaction([
+        app.prisma.buyerApprover.deleteMany({
+          where: { OR: [{ buyerId: memberId }, { approverId: memberId }] },
+        }),
+        app.prisma.householdMember.delete({ where: { id: memberId } }),
+      ]);
+      return { deleted: 1 };
     },
   );
 }

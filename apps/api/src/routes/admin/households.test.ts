@@ -178,3 +178,67 @@ describe('POST /api/admin/households/:id/members', () => {
     }
   });
 });
+
+describe('PATCH /api/admin/household-members/:id', () => {
+  it('updates approvalMode', async () => {
+    const { app, sessionCookie } = await seedAdmin();
+    try {
+      const h = await prisma.household.create({
+        data: { name: 'H', appealQuotaCount: 1, appealQuotaPeriod: 'monthly' },
+      });
+      const u = await prisma.user.create({
+        data: { oidcSubject: 'u', name: 'U', isAdmin: false },
+      });
+      const m = await prisma.householdMember.create({
+        data: { userId: u.id, householdId: h.id, approvalMode: 'any' },
+      });
+      const res = await app.inject({
+        method: 'PATCH',
+        url: `/api/admin/household-members/${m.id}`,
+        headers: { cookie: sessionCookie },
+        payload: { approvalMode: 'all' },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().member.approvalMode).toBe('all');
+    } finally {
+      await app.close();
+    }
+  });
+});
+
+describe('DELETE /api/admin/household-members/:id', () => {
+  it('removes the member and cascades buyer-approver rows', async () => {
+    const { app, sessionCookie } = await seedAdmin();
+    try {
+      const h = await prisma.household.create({
+        data: { name: 'H', appealQuotaCount: 1, appealQuotaPeriod: 'monthly' },
+      });
+      const u1 = await prisma.user.create({ data: { oidcSubject: 'd-m1', name: 'A', isAdmin: false } });
+      const u2 = await prisma.user.create({ data: { oidcSubject: 'd-m2', name: 'B', isAdmin: false } });
+      const m1 = await prisma.householdMember.create({
+        data: { userId: u1.id, householdId: h.id, approvalMode: 'any' },
+      });
+      const m2 = await prisma.householdMember.create({
+        data: { userId: u2.id, householdId: h.id, approvalMode: 'any' },
+      });
+      await prisma.buyerApprover.create({ data: { buyerId: m1.id, approverId: m2.id } });
+      await prisma.buyerApprover.create({ data: { buyerId: m2.id, approverId: m1.id } });
+
+      const res = await app.inject({
+        method: 'DELETE',
+        url: `/api/admin/household-members/${m1.id}`,
+        headers: { cookie: sessionCookie },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ deleted: 1 });
+      const remainingMembers = await prisma.householdMember.count({ where: { id: m1.id } });
+      expect(remainingMembers).toBe(0);
+      const remainingPairs = await prisma.buyerApprover.count({
+        where: { OR: [{ buyerId: m1.id }, { approverId: m1.id }] },
+      });
+      expect(remainingPairs).toBe(0);
+    } finally {
+      await app.close();
+    }
+  });
+});
