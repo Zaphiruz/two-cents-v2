@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import adminUsersRoutes from './users.js';
 
 export interface AdminUser {
   id: number;
@@ -37,5 +38,5 @@ export default async function adminRoutes(app: FastifyInstance) {
     return { ok: true, adminId: req.adminUser!.id };
   });
 
-  // Sub-route registrations are added in subsequent tasks.
+  await app.register(adminUsersRoutes);
 }
