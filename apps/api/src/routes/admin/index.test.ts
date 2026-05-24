@@ -7,7 +7,7 @@ describe('admin requireAdmin gate', () => {
   it('returns 401 without session on a placeholder admin route', async () => {
     const app = await buildApp();
     try {
-      const res = await app.inject({ method: 'GET', url: '/api/admin/_ping' });
+      const res = await app.inject({ method: 'GET', url: '/api/admin/users' });
       expect(res.statusCode).toBe(401);
       expect(res.json()).toMatchObject({ error: 'not_authenticated' });
     } finally {
@@ -23,7 +23,7 @@ describe('admin requireAdmin gate', () => {
     try {
       const res = await app.inject({
         method: 'GET',
-        url: '/api/admin/_ping',
+        url: '/api/admin/users',
         headers: { cookie: sessionCookie },
       });
       expect(res.statusCode).toBe(403);
@@ -33,7 +33,7 @@ describe('admin requireAdmin gate', () => {
     }
   });
 
-  it('returns 200 for admin session and exposes adminUser on request', async () => {
+  it('returns 200 for admin session and allows admin route access', async () => {
     const admin = await prisma.user.create({
       data: { oidcSubject: 'admin-1', name: 'Admin', isAdmin: true },
     });
@@ -41,11 +41,11 @@ describe('admin requireAdmin gate', () => {
     try {
       const res = await app.inject({
         method: 'GET',
-        url: '/api/admin/_ping',
+        url: '/api/admin/users',
         headers: { cookie: sessionCookie },
       });
       expect(res.statusCode).toBe(200);
-      expect(res.json()).toEqual({ ok: true, adminId: admin.id });
+      expect(res.json()).toMatchObject({ users: expect.any(Array) });
     } finally {
       await app.close();
     }

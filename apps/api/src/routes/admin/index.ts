@@ -35,11 +35,6 @@ async function requireAdmin(req: FastifyRequest, reply: FastifyReply): Promise<v
 export default async function adminRoutes(app: FastifyInstance) {
   app.addHook('preHandler', requireAdmin);
 
-  // Temporary smoke endpoint, kept for monitoring. Returns the admin's id.
-  app.get('/api/admin/_ping', async (req) => {
-    return { ok: true, adminId: req.adminUser!.id };
-  });
-
   await app.register(adminUsersRoutes);
   await app.register(adminHouseholdsRoutes);
   await app.register(adminAppealsRoutes);
