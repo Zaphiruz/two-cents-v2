@@ -40,6 +40,7 @@ export default function App() {
               />
               <Route path="feedback/new" element={<Placeholder title="New feedback" />} />
               <Route path="feedback" element={<Placeholder title="Feedback" />} />
+              <Route path="admin" element={<div className="p-6">Admin (coming soon)</div>} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
           </Routes>
