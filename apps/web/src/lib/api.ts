@@ -46,14 +46,16 @@ export async function request<T = unknown>(
     : await res.text().catch(() => null);
 
   if (!res.ok) {
-    const message =
-      (isJson &&
-        parsed &&
-        typeof parsed === 'object' &&
-        'message' in parsed &&
-        typeof (parsed as { message: unknown }).message === 'string' &&
-        (parsed as { message: string }).message) ||
-      `Request failed with status ${res.status}`;
+    let message = `Request failed with status ${res.status}`;
+    if (
+      isJson &&
+      parsed &&
+      typeof parsed === 'object' &&
+      'message' in parsed &&
+      typeof (parsed as { message: unknown }).message === 'string'
+    ) {
+      message = (parsed as { message: string }).message;
+    }
     throw new ApiError(res.status, message, parsed);
   }
 
