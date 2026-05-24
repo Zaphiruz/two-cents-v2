@@ -8,10 +8,12 @@ import QueuePage from '@/pages/QueuePage';
 import NewRequestPage from '@/pages/NewRequestPage';
 import RequestDetailPage from '@/pages/RequestDetailPage';
 import EditRequestPage from '@/pages/EditRequestPage';
-
-const Placeholder = ({ title }: { title: string }) => (
-  <div className="p-6 text-sm text-muted-foreground">{title} (coming soon)</div>
-);
+import AppealsPage from '@/pages/AppealsPage';
+import NewAppealPage from '@/pages/NewAppealPage';
+import NotificationSettingsPage from '@/pages/NotificationSettingsPage';
+import HouseholdPage from '@/pages/HouseholdPage';
+import FeedbackPage from '@/pages/FeedbackPage';
+import NewFeedbackPage from '@/pages/NewFeedbackPage';
 
 export default function App() {
   return (
@@ -30,18 +32,12 @@ export default function App() {
               <Route path="requests/new" element={<NewRequestPage />} />
               <Route path="requests/:id" element={<RequestDetailPage />} />
               <Route path="requests/:id/edit" element={<EditRequestPage />} />
-              <Route
-                path="appeals/new/:requestId"
-                element={<Placeholder title="New appeal" />}
-              />
-              <Route path="appeals" element={<Placeholder title="Appeals" />} />
-              <Route path="household" element={<Placeholder title="Household" />} />
-              <Route
-                path="settings/notifications"
-                element={<Placeholder title="Notification settings" />}
-              />
-              <Route path="feedback/new" element={<Placeholder title="New feedback" />} />
-              <Route path="feedback" element={<Placeholder title="Feedback" />} />
+              <Route path="appeals/new/:requestId" element={<NewAppealPage />} />
+              <Route path="appeals" element={<AppealsPage />} />
+              <Route path="household" element={<HouseholdPage />} />
+              <Route path="settings/notifications" element={<NotificationSettingsPage />} />
+              <Route path="feedback/new" element={<NewFeedbackPage />} />
+              <Route path="feedback" element={<FeedbackPage />} />
               <Route path="admin" element={<div className="p-6">Admin (coming soon)</div>} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
